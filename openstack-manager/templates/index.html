@@ -1,0 +1,2883 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/html">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenStack 实例管理</title>
+    <!-- 引用静态 CSS 文件 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@3.4.1/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/pwd.css') }}"/>
+    <script src="{{ url_for('static', filename='js/pwd.js') }}"></script>
+    <style>
+        body {
+            padding-top: 50px;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 51px;
+            bottom: 0;
+            left: 0;
+            z-index: 1000;
+            display: block;
+            padding: 20px;
+            overflow-x: hidden;
+            overflow-y: auto;
+            background-color: #f5f5f5;
+            border-right: 1px solid #eee;
+            width: 200px;
+        }
+
+        .content {
+            margin-left: 200px;
+            padding: 20px;
+        }
+
+        .nav-sidebar {
+            margin-right: -21px;
+            margin-bottom: 20px;
+            margin-left: -20px;
+        }
+
+        .nav-sidebar > li > a {
+            padding-right: 20px;
+            padding-left: 20px;
+        }
+
+        .nav-sidebar > .active > a,
+        .nav-sidebar > .active > a:hover,
+        .nav-sidebar > .active > a:focus {
+            color: #fff;
+            background-color: #428bca;
+        }
+
+        .clearfix::after {
+            content: "";
+            clear: both;
+            display: table;
+        }
+
+        .btn {
+            margin-right: 10px;
+        }
+
+        .btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.65;
+        }
+
+        .action-buttons {
+            margin: 20px 0;
+        }
+
+        .filter-section {
+            margin-bottom: 20px;
+        }
+
+        .error-message {
+            color: #dc3545;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+        }
+
+        .btn-loading {
+            position: relative;
+            pointer-events: none;
+        }
+
+        .btn-loading:after {
+            content: '';
+            display: inline-block;
+            width: 1em;
+            height: 1em;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            border-right-color: transparent;
+            animation: spin 0.75s linear infinite;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .table > tbody > tr > td {
+            vertical-align: middle;
+        }
+
+        .pagination {
+            margin: 20px 0;
+        }
+
+        .dropdown-menu {
+            min-width: 100px;
+        }
+
+        .dropdown-menu > li > a {
+            padding: 3px 15px;
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: center;
+        }
+
+        .modal-lg {
+            width: 900px;
+        }
+
+        pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        .instance-checkbox {
+            cursor: pointer;
+        }
+
+        .instance-checkbox:disabled {
+            cursor: not-allowed;
+        }
+
+        .batch-actions {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+
+        .batch-actions .btn {
+            margin-right: 10px;
+        }
+
+        #deleteInstancesList {
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        #deleteInstancesList ul {
+            margin-bottom: 0;
+        }
+
+        .modal-body .alert {
+            margin-bottom: 0;
+        }
+
+        #terminal-container {
+            background-color: #000;
+            padding: 0;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+
+        #terminal {
+            padding: 10px;
+            height: 600px;
+        }
+
+        .xterm-viewport {
+            overflow-y: auto !important;
+        }
+
+        .xterm {
+            padding: 0;
+        }
+
+        .connection-list {
+            margin-bottom: 20px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 5px;
+        }
+
+        /* ... 在现有样式中添加 ... */
+        .terminal-header {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: flex-end;
+        }
+    </style>
+</head>
+<body>
+<!-- 密码输入框 -->
+<div class="password-container">
+    <h2>请输入密码访问页面</h2>
+    <input type="password" id="passwordInput" placeholder="输入密码">
+    <button onclick="checkPassword()">提交</button>
+    <div id="errorMessage" class="error-message"></div>
+</div>
+
+
+<nav class="navbar navbar-inverse navbar-fixed-top">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <a class="navbar-brand" href="#">OpenStack 实例管理系统</a>
+        </div>
+        <div id="navbar" class="navbar-collapse collapse">
+            <ul class="nav navbar-nav navbar-right">
+                <li><a href="#">设置</a></li>
+                <li><a href="#">帮助</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<div class="sidebar">
+    <ul class="nav nav-sidebar">
+        <li class="active"><a href="javascript:void(0)" onclick="showSection('all-instances')">实例管理</a></li>
+        <li><a href="javascript:void(0)" onclick="showSection('volumes-section')">存储卷管理</a></li>
+        <li><a href="javascript:void(0)" onclick="showSection('ssh-terminal')">SSH管理</a></li>
+<!--        <li><a href="javascript:void(0)" onclick="showSection('instance-actions')">实例操作</a></li>-->
+    </ul>
+</div>
+
+<div class="content" id="content">
+    <div id="all-instances" class="section">
+        <h1>所有实例</h1>
+        <div class="filter-section">
+            <div class="form-group">
+                <label for="cloud-select">选择云环境</label>
+                <select id="cloud-select" class="form-control">
+                    <option value="">请选择云环境</option>
+                </select>
+            </div>
+            <div class="row">
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="name-search">实例名称</label>
+                        <input type="text" id="name-search" class="form-control" placeholder="输入实例名称">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="status-select">状态</label>
+                        <select id="status-select" class="form-control">
+                            <option value="">全部状态</option>
+                            <option value="ACTIVE">运行中</option>
+                            <option value="SHUTOFF">已停止</option>
+                            <option value="PAUSED">已暂停</option>
+                            <option value="SUSPENDED">已挂起</option>
+                            <option value="ERROR">错误</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="type-select">实例类型</label>
+                        <select id="type-select" class="form-control">
+                            <option value="">全部类型</option>
+                            <option value="small">小型实例</option>
+                            <option value="medium">中型实例</option>
+                            <option value="large">大型实例</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="ip-search">IP地址</label>
+                        <input type="text" id="ip-search" class="form-control" placeholder="输入IP地址">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="form-group">
+                        <label for="date-search">创建日期</label>
+                        <input type="date" id="date-search" class="form-control">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-buttons clearfix">
+            <button id="query-btn" class="btn btn-primary">
+                <i class="fa fa-refresh"></i> 查询实例
+            </button>
+            <button id="export-btn" class="btn btn-success">
+                <i class="fa fa-download"></i> 导出 Excel
+            </button>
+            <button class="btn btn-info" onclick="showCreateInstanceModal()">
+                <i class="fa fa-plus"></i> 创建实例
+            </button>
+        </div>
+
+        <div id="all-instances1" class="card">
+            <div id="error-container"></div>
+            <table class="table table-bordered">
+                <thead>
+                <tr>
+                    <th width="40">
+                        <input type="checkbox" id="select-all" title="全选/取消全选">
+                    </th>
+                    <th>云环境</th>
+                    <th>实例名称</th>
+                    <th>实例 ID</th>
+                    <th>状态</th>
+                    <th>IP 地址</th>
+                    <th>配置</th>
+                    <th>创建时间</th>
+                    <th>更新时间</th>
+                    <th>操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- 实例数据动态填充 -->
+                </tbody>
+            </table>
+            <nav aria-label="Page navigation">
+                <ul id="pagination" class="pagination">
+                    <!-- 分页按钮动态生成 -->
+                </ul>
+            </nav>
+        </div>
+
+        <!-- 添加批量操作按钮组 -->
+        <div class="batch-actions" style="display: none; margin-top: 10px;">
+            <button class="btn btn-primary btn-sm" onclick="batchAction('start')">
+                <i class="fa fa-play"></i> 批量启动
+            </button>
+            <button class="btn btn-warning btn-sm" onclick="batchAction('stop')">
+                <i class="fa fa-stop"></i> 批量停止
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="showBatchDeleteModal()">
+                <i class="fa fa-trash"></i> 批量删除
+            </button>
+        </div>
+
+        <!-- 添加删除确认模态框 -->
+        <div class="modal fade" id="deleteConfirmModal" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        <h4 class="modal-title text-danger">
+                            <i class="fa fa-exclamation-triangle"></i> 删除确认
+                        </h4>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-danger">删除操作不可恢复，请谨慎操作！</p>
+                        <div class="form-group">
+                            <label for="deletePassword">请输入删除密码：</label>
+                            <input type="password" class="form-control" id="deletePassword"
+                                   placeholder="请输入删除密码">
+                        </div>
+                        <div id="deleteInstancesList">
+                            <!-- 待删除实例列表将在这里显示 -->
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-danger" onclick="confirmDelete()">确认删除</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 创建实例模态框 -->
+        <div class="modal fade" id="createInstanceModal" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        <h4 class="modal-title">创建新实例</h4>
+                    </div>
+                    <div class="modal-body">
+                        <form id="create-instance-form">
+                            <div class="form-group">
+                                <label for="create-cloud-select">云环境</label>
+                                <select id="create-cloud-select" class="form-control" required>
+                                    <option value="">请选择云环境</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="instance-name">实例名称</label>
+                                <input type="text" class="form-control" id="instance-name" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="flavor-select">实例类型</label>
+                                <select id="flavor-select" class="form-control" required>
+                                    <option value="">请选择实例类型</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="image-select">镜像</label>
+                                <select id="image-select" class="form-control" required>
+                                    <option value="">请选择镜像</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="network-select">网络</label>
+                                <select id="network-select" class="form-control" required>
+                                    <option value="">请选择网络</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="keypair-select">密钥对</label>
+                                <select id="keypair-select" class="form-control">
+                                    <option value="">无</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="security-groups">安全组</label>
+                                <select id="security-groups" class="form-control" multiple>
+                                    <option value="default">default</option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="createInstance()">创建</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="volumes-section" class="section" style="display: none;">
+        <h1>存储卷管理</h1>
+        <div class="filter-section">
+            <div class="form-group">
+                <label for="volume-cloud-select">选择云环境</label>
+                <select id="volume-cloud-select" class="form-control">
+                    <option value="">请选择云环境</option>
+                </select>
+            </div>
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="volume-name-search">卷名称</label>
+                        <input type="text" id="volume-name-search" class="form-control" placeholder="输入卷名称">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="volume-status-select">状态</label>
+                        <select id="volume-status-select" class="form-control">
+                            <option value="">全部状态</option>
+                            <option value="available">可用</option>
+                            <option value="in-use">使用中</option>
+                            <option value="error">错误</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="volume-size-search">大小(GB)</label>
+                        <input type="number" id="volume-size-search" class="form-control" placeholder="输入卷大小">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="form-group">
+                        <label for="volume-type-select">卷类型</label>
+                        <select id="volume-type-select" class="form-control">
+                            <option value="">全部类型</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-buttons clearfix">
+            <button id="volume-query-btn" class="btn btn-primary">
+                <i class="fa fa-refresh"></i> 查询卷
+            </button>
+            <button id="export-volumes-btn" class="btn btn-success" onclick="exportVolumes()">
+                <i class="fa fa-download"></i> 导出 Excel
+            </button>
+        </div>
+
+        <div id="volumes-list" class="card">
+            <div id="volume-error-container"></div>
+            <table class="table table-bordered">
+                <thead>
+                <tr>
+                    <th>云环境</th>
+                    <th>卷名称</th>
+                    <th>大小(GB)</th>
+                    <th>状态</th>
+                    <th>类型</th>
+                    <th>挂载实例</th>
+                    <th>创建时间</th>
+                    <th>可用区</th>
+                    <th>操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- 卷数据动态填充 -->
+                </tbody>
+            </table>
+            <nav aria-label="Page navigation">
+                <ul id="volume-pagination" class="pagination">
+                    <!-- 分页按钮动态生成 -->
+                </ul>
+            </nav>
+        </div>
+
+    </div>
+
+    <div id="ssh-terminal" class="section" style="display: none;">
+        <h1>SSH终端</h1>
+
+        <!-- 连接列表 -->
+        <div class="connection-list">
+            <div class="row">
+                <div class="col-md-12">
+                    <button class="btn btn-primary" onclick="showNewConnectionModal()">
+                        <i class="fa fa-plus"></i> 新建连接
+                    </button>
+                </div>
+            </div>
+            <div class="row" style="margin-top: 20px;">
+                <div class="col-md-12">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>主机</th>
+                                <th>端口</th>
+                                <th>用户名</th>
+                                <th>描述</th>
+                                <th>操作</th>
+                            </tr>
+                            </thead>
+                            <tbody id="connection-list">
+                            <!-- 连接列表将动态填充 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 终端显示区域 -->
+        <div id="terminal-container">
+            <div id="terminal"></div>
+        </div>
+    </div>
+
+    <!-- 连接模态框 -->
+    <div class="modal fade" id="connectionModal" tabindex="-1" role="dialog">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h4 class="modal-title">SSH连接</h4>
+                </div>
+                <div class="modal-body">
+                    <form id="connection-form">
+
+                        <input type="hidden" id="connection-id">
+                        <div class="form-group">
+                            <label for="connection-name">名称</label>
+                            <input type="text" class="form-control" id="connection-name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="connection-host">主机地址</label>
+                            <input type="text" class="form-control" id="connection-host" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="connection-port">端口</label>
+                            <input type="number" class="form-control" id="connection-port" value="22" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="connection-username">用户名</label>
+                            <input type="text" class="form-control" id="connection-username" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="connection-password">密码</label>
+                            <input type="password" class="form-control" id="connection-password" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="connection-description">描述</label>
+                            <textarea class="form-control" id="connection-description"></textarea>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-warning" onclick="testConnection()">测试连接</button>
+                    <button type="button" class="btn btn-primary" onclick="saveConnection()">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+<!--    <div id="instance-actions" class="section" style="display: none;">-->
+<!--        <h1>实例操作</h1>-->
+<!--        <div class="panel panel-default">-->
+<!--            <div class="panel-body">-->
+<!--                实例操作选项将在这里显示-->
+<!--            </div>-->
+<!--        </div>-->
+<!--    </div>-->
+
+    <!-- 添加文件传输相关的HTML -->
+    <div class="file-transfer-panel" style="display: none;">
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                <h3 class="panel-title">文件传输</h3>
+            </div>
+            <div class="panel-body">
+                <!-- 上传文件表单 -->
+                <form id="upload-form" class="form-horizontal">
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">远程路径</label>
+                        <div class="col-sm-10">
+                            <input type="text" class="form-control" id="remote-path" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">选择文件</label>
+                        <div class="col-sm-10">
+                            <input type="file" id="file-input" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="col-sm-offset-2 col-sm-10">
+                            <div class="checkbox">
+                                <label>
+                                    <input type="checkbox" id="resume-upload" checked> 断点续传
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="col-sm-offset-2 col-sm-10">
+                            <button type="submit" class="btn btn-primary">上传</button>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- 下载文件表单 -->
+                <form id="download-form" class="form-horizontal">
+                    <div class="form-group">
+                        <label class="col-sm-2 control-label">远程文件路径</label>
+                        <div class="col-sm-10">
+                            <input type="text" class="form-control" id="download-path" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="col-sm-offset-2 col-sm-10">
+                            <div class="checkbox">
+                                <label>
+                                    <input type="checkbox" id="resume-download" checked> 断点续传
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="col-sm-offset-2 col-sm-10">
+                            <button type="submit" class="btn btn-primary">下载</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="/static/js/jquery.min.js"></script>
+<script src="/static/js/bootstrap.min.js"></script>
+
+
+<script>
+    // 修改页面加载逻辑
+    let connectionsLoaded = false;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // 使用 Promise.all 并行加载数据
+        Promise.all([
+            loadCloudEnvironments(),
+            loadConnections()
+        ]).catch(error => {
+            console.error('Failed to load initial data:', error);
+        });
+    });
+
+    // 初始化关键功能
+    function initializeCriticalFeatures() {
+        // 加载云环境列表
+        loadCloudEnvironments();
+
+        // 初始化基本事件监听
+        initializeBasicEventListeners();
+    }
+
+    // 延迟加载非关键资源
+    function loadNonCriticalResources() {
+        // 初始化 SSH 连接列表
+        loadConnections();
+
+        // 初始化其他功能
+        initializeOtherFeatures();
+    }
+
+    // 优化云环境加载
+    async function loadCloudEnvironments() {
+        const cloudSelect = document.getElementById('cloud-select');
+        const volumeCloudSelect = document.getElementById('volume-cloud-select');
+
+        if (!cloudSelect && !volumeCloudSelect) return;
+
+        try {
+            const response = await fetch('/api/clouds');
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                const options = ['<option value="">请选择云环境</option>'];
+                data.data.forEach(cloud => {
+                    options.push(`<option value="${cloud}">${cloud}</option>`);
+                });
+
+                const optionsHtml = options.join('');
+                if (cloudSelect) cloudSelect.innerHTML = optionsHtml;
+                if (volumeCloudSelect) volumeCloudSelect.innerHTML = optionsHtml;
+            }
+        } catch (error) {
+            console.error('Failed to load cloud environments:', error);
+            const errorHtml = '<option value="">加载失败</option>';
+            if (cloudSelect) cloudSelect.innerHTML = errorHtml;
+            if (volumeCloudSelect) volumeCloudSelect.innerHTML = errorHtml;
+        }
+    }
+
+    // 优化连接列表加载
+    async function loadConnections() {
+        if (connectionsLoaded) return;
+
+        const tbody = document.getElementById('connection-list');
+        if (!tbody) return;
+
+        try {
+            const response = await fetch('/api/ssh/connections');
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                tbody.innerHTML = data.data.map(conn => `
+                    <tr>
+                        <td>${conn.name}</td>
+                        <td>${conn.host}</td>
+                        <td>${conn.port}</td>
+                        <td>${conn.username}</td>
+                        <td>${conn.description || '-'}</td>
+                        <td>
+                            <button class="btn btn-xs btn-primary" onclick="connectSSH(${conn.id})">
+                                连接
+                            </button>
+                            <button class="btn btn-xs btn-info" onclick="editConnection(${conn.id})">
+                                编辑
+                            </button>
+                            <button class="btn btn-xs btn-danger" onclick="deleteConnection(${conn.id})">
+                                删除
+                            </button>
+                        </td>
+                    </tr>
+                `).join('') || '<tr><td colspan="6" class="text-center">暂无数据</td></tr>';
+
+                connectionsLoaded = true;
+            }
+        } catch (error) {
+            console.error('Failed to load connections:', error);
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">加载失败</td></tr>';
+        }
+    }
+
+    // 页面初始化
+    document.addEventListener('DOMContentLoaded', function () {
+        fetchEnvironments();
+        initializeEventListeners();
+        initializeTerminal();
+        initializeCheckboxHandlers();
+        loadConnections();
+    });
+
+    // 初始化事件监听器
+    function initializeEventListeners() {
+        const queryBtn = document.getElementById('query-btn');
+        const exportBtn = document.getElementById('export-btn');
+        const cloudSelect = document.getElementById('cloud-select');
+
+        if (queryBtn) {
+            queryBtn.addEventListener('click', () => fetchAllInstances(1));
+        }
+
+        if (exportBtn) {
+            exportBtn.addEventListener('click', exportInstances);
+        }
+
+        if (cloudSelect) {
+            cloudSelect.addEventListener('change', () => {
+                clearError();
+                if (cloudSelect.value) {
+                    fetchAllInstances(1);
+                }
+            });
+        }
+
+        // 添加过滤器变化事件
+        ['name-search', 'status-select', 'type-select', 'ip-search', 'date-search'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                // 对于名称搜索，使用 input 事件而不是 change 事件，实现实时搜索
+                if (id === 'name-search') {
+                    let timer;
+                    element.addEventListener('input', () => {
+                        if (cloudSelect.value) {
+                            // 使用防抖，避免频繁请求
+                            clearTimeout(timer);
+                            timer = setTimeout(() => {
+                                fetchAllInstances(1);
+                            }, 500);
+                        }
+                    });
+                } else {
+                    element.addEventListener('change', () => {
+                        if (cloudSelect.value) {
+                            fetchAllInstances(1);
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    // 获取环境列表
+    function fetchEnvironments() {
+        const select = document.getElementById('cloud-select');
+        if (!select) return;
+
+        select.innerHTML = '<option value="">加载中...</option>';
+
+        fetch('/environments')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应不正常');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    select.innerHTML = '<option value="">请选择云环境</option>';
+                    data.data.forEach(env => {
+                        const option = document.createElement('option');
+                        option.value = env;
+                        option.textContent = env;
+                        select.appendChild(option);
+                    });
+                } else {
+                    throw new Error(data.message || '获取环境列表失败');
+                }
+            })
+            .catch(error => {
+                showError('获取环境列表失败: ' + error.message);
+                select.innerHTML = '<option value="">加载失败</option>';
+            });
+    }
+
+    // 获取实例列表
+    function fetchAllInstances(page = 1) {
+        const queryBtn = document.getElementById('query-btn');
+        const cloudName = document.getElementById('cloud-select').value;
+
+        if (!cloudName) {
+            showError('请选择云环境');
+            return;
+        }
+
+        setLoading(queryBtn, true);
+        clearError();
+
+        const params = new URLSearchParams({
+            cloud_name: cloudName,
+            name: document.getElementById('name-search').value,
+            status: document.getElementById('status-select').value,
+            instance_type: document.getElementById('type-select').value,
+            ip: document.getElementById('ip-search').value,
+            created_date: document.getElementById('date-search').value,
+            page: page,
+            per_page: 10
+        });
+
+        fetch(`/instances?${params.toString()}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应不正常');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    updateInstanceTable(data.data);
+                    updatePagination(data.page, data.total_pages);
+                } else {
+                    throw new Error(data.message || '获取实例列表失败');
+                }
+            })
+            .catch(error => {
+                showError('获取实例列表失败: ' + error.message);
+            })
+            .finally(() => {
+                setLoading(queryBtn, false);
+            });
+    }
+
+    // 更新实例表格
+    function updateInstanceTable(instances) {
+        const tbody = document.querySelector('#all-instances tbody');
+        if (!tbody) return;
+
+        if (!instances || instances.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center">暂无数据</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = instances.map(instance => {
+            // 状态样式逻辑
+            let statusClass = '';
+            let statusText = '';
+
+            // 检查是否处于转换状态
+            const isTransitioning = instance.status.includes('ING');
+
+            switch (instance.status) {
+                case 'ACTIVE':
+                    statusClass = 'success';
+                    statusText = '运行中';
+                    break;
+                case 'SHUTOFF':
+                    statusClass = 'danger';
+                    statusText = '已停止';
+                    break;
+                case 'PAUSED':
+                    statusClass = 'warning';
+                    statusText = '已暂停';
+                    break;
+                case 'SUSPENDED':
+                    statusClass = 'warning';
+                    statusText = '已挂起';
+                    break;
+                default:
+                    if (isTransitioning) {
+                        statusClass = 'info';
+                        statusText = '状态转换中...';
+                    } else {
+                        statusClass = 'default';
+                        statusText = instance.status;
+                    }
+            }
+
+            // 如果状态正在转换中，禁用操作按钮
+            const isDisabled = isTransitioning ? 'disabled' : '';
+
+            return `
+                <tr data-instance-id="${instance.id}" data-cloud-name="${instance.cloud}">
+                    <td>
+                        <input type="checkbox" class="instance-checkbox"
+                               data-instance-id="${instance.id}"
+                               data-cloud-name="${instance.cloud}"
+                               data-instance-name="${instance.name}"
+                               ${isTransitioning ? 'disabled' : ''}>
+                    </td>
+                    <td>${instance.cloud || '-'}</td>
+                    <td>${instance.name || '-'}</td>
+                    <td>${instance.id || '-'}</td>
+                    <td><span class="label label-${statusClass}">${statusText}</span></td>
+                    <td>${instance.ip_addresses || '-'}</td>
+                    <td>${instance.flavor || '-'}</td>
+                    <td>${instance.created || '-'}</td>
+                    <td>${instance.updated || '-'}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-default dropdown-toggle btn-sm ${isDisabled}"
+                                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false"
+                                    ${isDisabled}>
+                                操作 <span class="caret"></span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-right">
+                                ${getActionButtons(instance, isTransitioning)}
+                                <li role="separator" class="divider"></li>
+                                <li><a href="#" onclick="showDeleteModal('${instance.cloud}', '${instance.id}', '${instance.name}')">
+                                    <i class="fa fa-trash text-danger"></i> 删除
+                                </a></li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        // 更新全选框状态
+        updateSelectAllCheckbox();
+    }
+
+    // 获取操作按钮HTML
+    function getActionButtons(instance, isTransitioning) {
+        if (isTransitioning) return '';
+
+        let buttons = '';
+        switch (instance.status) {
+            case 'ACTIVE':
+                buttons = `
+                    <li><a href="#" onclick="performAction('${instance.cloud}', '${instance.id}', 'stop')">
+                        <i class="fa fa-stop"></i> 停止
+                    </a></li>
+                    <li><a href="#" onclick="performAction('${instance.cloud}', '${instance.id}', 'reboot')">
+                        <i class="fa fa-refresh"></i> 重启
+                    </a></li>
+                    <li><a href="#" onclick="performAction('${instance.cloud}', '${instance.id}', 'pause')">
+                        <i class="fa fa-pause"></i> 暂停
+                    </a></li>
+                `;
+                break;
+            case 'SHUTOFF':
+                buttons = `
+                    <li><a href="#" onclick="performAction('${instance.cloud}', '${instance.id}', 'start')">
+                        <i class="fa fa-play"></i> 启动
+                    </a></li>
+                `;
+                break;
+            case 'PAUSED':
+                buttons = `
+                    <li><a href="#" onclick="performAction('${instance.cloud}', '${instance.id}', 'unpause')">
+                        <i class="fa fa-play"></i> 恢复
+                    </a></li>
+                `;
+                break;
+        }
+        return buttons;
+    }
+
+    // 更新分页
+    function updatePagination(currentPage, totalPages) {
+        const pagination = document.getElementById('pagination');
+        if (!pagination) return;
+
+        pagination.innerHTML = '';
+
+        if (totalPages <= 1) return;
+
+        const pages = [];
+
+        // 添加上一页按钮
+        pages.push(`
+                <li class="${currentPage === 1 ? 'disabled' : ''}">
+                    <a href="#" onclick="return fetchAllInstances(${currentPage - 1})">&laquo;</a>
+                </li>
+            `);
+
+        // 添加页码按钮
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                pages.push(`
+                        <li class="${i === currentPage ? 'active' : ''}">
+                            <a href="#" onclick="return fetchAllInstances(${i})">${i}</a>
+                        </li>
+                    `);
+            } else if (i === currentPage - 3 || i === currentPage + 3) {
+                pages.push('<li class="disabled"><a href="#">...</a></li>');
+            }
+        }
+
+        // 添加下一页按钮
+        pages.push(`
+                <li class="${currentPage === totalPages ? 'disabled' : ''}">
+                    <a href="#" onclick="return fetchAllInstances(${currentPage + 1})">&raquo;</a>
+                </li>
+            `);
+
+        pagination.innerHTML = pages.join('');
+    }
+
+    // 导出实例数据
+    function exportInstances() {
+        const exportBtn = document.getElementById('export-btn');
+        const cloudName = document.getElementById('cloud-select').value;
+
+        if (!cloudName) {
+            showError('请选择云环境');
+            return;
+        }
+
+        setLoading(exportBtn, true);
+        clearError();
+
+        fetch(`/instances/export?cloud_name=${encodeURIComponent(cloudName)}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('导出失败');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `instances_${cloudName}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                showError('导出失败: ' + error.message);
+            })
+            .finally(() => {
+                setLoading(exportBtn, false);
+            });
+    }
+
+    // 设置按钮加载状态
+    function setLoading(button, isLoading) {
+        if (!button) return;
+
+        button.disabled = isLoading;
+        if (isLoading) {
+            button.classList.add('btn-loading');
+        } else {
+            button.classList.remove('btn-loading');
+        }
+    }
+
+    // 显示错误信息
+    function showError(message) {
+        const container = document.getElementById('error-container');
+        if (container) {
+            container.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+    }
+
+    // 清除错误信息
+    function clearError() {
+        const container = document.getElementById('error-container');
+        if (container) {
+            container.innerHTML = '';
+        }
+    }
+
+    // 切换显示区域
+    function showSection(sectionId) {
+        // 隐藏所有区域
+        document.querySelectorAll('.section').forEach(section => {
+            section.style.display = 'none';
+        });
+
+        // 显示选中的区域
+        const selectedSection = document.getElementById(sectionId);
+        if (selectedSection) {
+            selectedSection.style.display = 'block';
+
+            // 如果是存储卷管理，初始化相关事件
+            if (sectionId === 'volumes-section') {
+                initializeVolumeEventListeners();
+            }
+
+            // 如果是SSH终端，加载连接列表
+            if (sectionId === 'ssh-terminal') {
+                loadConnections();
+                // 确保显示连接列表而不是终端
+                document.querySelector('.connection-list').style.display = 'block';
+                document.getElementById('terminal-container').style.display = 'none';
+            } else {
+                // 如果切换离开SSH终端，断开连接
+                disconnectSSH();
+            }
+        }
+
+        // 更新侧边栏活动状态
+        document.querySelectorAll('.nav-sidebar li').forEach(li => {
+            li.classList.remove('active');
+        });
+        document.querySelector(`.nav-sidebar li a[onclick*="${sectionId}"]`).parentElement.classList.add('active');
+    }
+
+    // 添加执行操作的函数
+    function performAction(cloudName, instanceId, action) {
+        if (!confirm(`确定要对实例执行 ${getActionName(action)} 操作吗？`)) {
+            return;
+        }
+
+        const url = `/instances/${cloudName}/${instanceId}/${action}`;
+
+        // 显示加载提示
+        const loadingToast = showToast('正在执行操作，请稍候...', 'info');
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast('操作已执行，正在等待状态更新...', 'info');
+                    // 开始轮询检查实例状态
+                    pollInstanceStatus(cloudName, instanceId, action);
+                } else {
+                    showToast(`操作失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`操作失败: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                if (loadingToast) {
+                    loadingToast.close();
+                }
+            });
+    }
+
+    // 轮询检查实例状态
+    function pollInstanceStatus(cloudName, instanceId, action, attempts = 0) {
+        const maxAttempts = 30; // 最多轮询30次
+        const interval = 2000; // 每2秒检查一次
+
+        // 预期的最终状态
+        const expectedStatus = {
+            'start': 'ACTIVE',
+            'stop': 'SHUTOFF',
+            'reboot': 'ACTIVE',
+            'pause': 'PAUSED',
+            'unpause': 'ACTIVE'
+        }[action];
+
+        // 获取实例状态
+        fetch(`/instances/${cloudName}/${instanceId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const instanceStatus = data.data.status;
+
+                    // 如果状态已经变更到预期状态，或者达到最大尝试次数
+                    if (instanceStatus === expectedStatus || attempts >= maxAttempts) {
+                        if (instanceStatus === expectedStatus) {
+                            showToast('操作已完成', 'success');
+                        } else {
+                            showToast('状态更新超时，请手动刷新查看最新状态', 'warning');
+                        }
+                        // 刷新实例列表
+                        fetchAllInstances(1);
+                    } else {
+                        // 继续轮询
+                        setTimeout(() => {
+                            pollInstanceStatus(cloudName, instanceId, action, attempts + 1);
+                        }, interval);
+                    }
+                } else {
+                    showToast(`状态检查失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`状态检查失败: ${error.message}`, 'error');
+            });
+    }
+
+    // 获取操作名称
+    function getActionName(action) {
+        const actionNames = {
+            'start': '启动',
+            'stop': '停止',
+            'reboot': '重启',
+            'pause': '暂停',
+            'unpause': '恢复'
+        };
+        return actionNames[action] || action;
+    }
+
+    // 显示提示信息
+    function showToast(message, type = 'info') {
+        // 创建提示元素
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type} alert-dismissible fade in`;
+        toast.style.position = 'fixed';
+        toast.style.top = '20px';
+        toast.style.right = '20px';
+        toast.style.zIndex = '9999';
+
+        toast.innerHTML = `
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+            ${message}
+        `;
+
+        document.body.appendChild(toast);
+
+        // 3秒后自动关闭
+        setTimeout(() => {
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
+            }
+        }, 3000);
+
+        return {
+            close: () => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }
+        };
+    }
+
+    // 查看实例详情
+    function showInstanceDetails(cloudName, instanceId) {
+        // 显示加载提示
+        const loadingToast = showToast('正在加载实例详情...', 'info');
+
+        fetch(`/instances/${cloudName}/${instanceId}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // 创建模态框显示详情
+                    showDetailsModal(data.data);
+                } else {
+                    showToast(`加载详情失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`加载详情失败: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                if (loadingToast) {
+                    loadingToast.close();
+                }
+            });
+    }
+
+    // 显示详情模态框
+    function showDetailsModal(instance) {
+        const modalHtml = `
+            <div class="modal fade" id="instanceDetailsModal" tabindex="-1" role="dialog">
+                <div class="modal-dialog modal-lg" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                            <h4 class="modal-title">实例详情</h4>
+                        </div>
+                        <div class="modal-body">
+                            <table class="table table-bordered">
+                                <tr>
+                                    <th width="150">云环境</th>
+                                    <td>${instance.cloud || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <th>实例名称</th>
+                                    <td>${instance.name || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <th>实例 ID</th>
+                                    <td>${instance.id || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <th>状态</th>
+                                    <td>${instance.status || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <th>IP 地址</th>
+                                    <td>${instance.ip_addresses || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <th>配置</th>
+                                    <td>${instance.flavor || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <th>创建时间</th>
+                                    <td>${instance.created || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <th>更新时间</th>
+                                    <td>${instance.updated || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <th>安全组</th>
+                                    <td>${instance.security_groups?.join(', ') || '-'}</td>
+                                </tr>
+                                <tr>
+                                    <th>元数据</th>
+                                    <td><pre>${JSON.stringify(instance.metadata || {}, null, 2)}</pre></td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-default" data-dismiss="modal">关闭</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // 移除可能存在的旧模态框
+        const oldModal = document.getElementById('instanceDetailsModal');
+        if (oldModal) {
+            oldModal.parentNode.removeChild(oldModal);
+        }
+
+        // 添加新模态框
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // 显示模态框
+        $('#instanceDetailsModal').modal('show');
+    }
+
+    // 显示批量删除模态框
+    function showBatchDeleteModal() {
+        // 显示加载提示
+        const loadingToast = showToast('正在加载待删除实例列表...', 'info');
+
+        fetch('/instances/batch-delete')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // 创建模态框显示待删除实例列表
+                    showDeleteConfirmModal(data.data);
+                } else {
+                    showToast(`加载待删除实例列表失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`加载待删除实例列表失败: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                if (loadingToast) {
+                    loadingToast.close();
+                }
+            });
+    }
+
+    // 显示删除确认模态框
+    function showDeleteConfirmModal(instances) {
+        const modalHtml = `
+            <div class="modal fade" id="deleteConfirmModal" tabindex="-1" role="dialog">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                            <h4 class="modal-title text-danger">
+                                <i class="fa fa-exclamation-triangle"></i> 删除确认
+                            </h4>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-danger">删除操作不可恢复，请谨慎操作！</p>
+                            <div class="form-group">
+                                <label for="deletePassword">请输入删除密码：</label>
+                                <input type="password" class="form-control" id="deletePassword" placeholder="请输入删除密码">
+                            </div>
+                            <div id="deleteInstancesList">
+                                <ul>
+                                    ${instances.map(instance => `<li>${instance.cloud} - ${instance.name} - ${instance.id}</li>`).join('')}
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                            <button type="button" class="btn btn-danger" onclick="confirmDelete()">确认删除</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // 移除可能存在的旧模态框
+        const oldModal = document.getElementById('deleteConfirmModal');
+        if (oldModal) {
+            oldModal.parentNode.removeChild(oldModal);
+        }
+
+        // 添加新模态框
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // 显示模态框
+        $('#deleteConfirmModal').modal('show');
+    }
+
+    // 确认删除
+    function confirmDelete() {
+        const modal = $('#deleteConfirmModal');
+        const password = document.getElementById('deletePassword').value;
+
+        if (!password) {
+            showToast('请输入删除密码', 'warning');
+            return;
+        }
+
+        // 验证密码
+        fetch('/verify-delete-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({password: password})
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // 获取删除token后执行删除操作
+                    const cloudName = modal.data('cloudName');
+                    const instanceId = modal.data('instanceId');
+
+                    fetch(`/instances/${cloudName}/${instanceId}/delete`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${data.token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                        .then(response => response.json())
+                        .then(deleteData => {
+                            if (deleteData.status === 'success') {
+                                showToast('实例删除成功', 'success');
+                                modal.modal('hide');
+                                // 刷新实例列表
+                                fetchAllInstances(1);
+                            } else {
+                                showToast(`删除失败: ${deleteData.message}`, 'error');
+                            }
+                        })
+                        .catch(error => {
+                            showToast(`删除请求失败: ${error.message}`, 'error');
+                        });
+                } else {
+                    showToast(data.message || '密码验证失败', 'error');
+                }
+            })
+            .catch(error => {
+                showToast('密码验证请求失败', 'error');
+            });
+    }
+
+    // 显示删除确认模态框
+    function showDeleteModal(cloudName, instanceId, instanceName, instances = null) {
+        console.log('Showing delete modal for:', {cloudName, instanceId, instanceName, instances});
+
+        const modal = $('#deleteConfirmModal');
+        const instancesList = document.getElementById('deleteInstancesList');
+
+        // 清空之前的密码输入
+        document.getElementById('deletePassword').value = '';
+
+        // 设置要删除的实例信息
+        if (instances) {
+            // 批量删除
+            instancesList.innerHTML = `
+                <div class="alert alert-warning">
+                    <h4>即将删除以下 ${instances.length} 个实例：</h4>
+                    <ul>
+                        ${instances.map(instance => `
+                            <li>${instance.instanceName} (${instance.instanceId})</li>
+                        `).join('')}
+                    </ul>
+                </div>
+            `;
+            modal.data('instances', instances);
+            modal.data('isBatch', true);
+        } else {
+            // 单个删除
+            instancesList.innerHTML = `
+                <div class="alert alert-warning">
+                    即将删除实例：${instanceName} (${instanceId})
+                </div>
+            `;
+            modal.data('cloudName', cloudName);
+            modal.data('instanceId', instanceId);
+            modal.data('isBatch', false);
+        }
+
+        // 确保模态框显示
+        modal.modal({
+            backdrop: 'static',
+            keyboard: false
+        });
+    }
+
+    // 添加多选相关的函数
+    function initializeCheckboxHandlers() {
+        // 全选/取消全选
+        document.getElementById('select-all').addEventListener('change', function () {
+            const checkboxes = document.querySelectorAll('.instance-checkbox:not(:disabled)');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+            updateBatchActionsVisibility();
+        });
+
+        // 监听单个复选框的变化
+        document.addEventListener('change', function (e) {
+            if (e.target.classList.contains('instance-checkbox')) {
+                updateSelectAllCheckbox();
+                updateBatchActionsVisibility();
+            }
+        });
+    }
+
+    // 更新全选框状态
+    function updateSelectAllCheckbox() {
+        const checkboxes = document.querySelectorAll('.instance-checkbox:not(:disabled)');
+        const checkedBoxes = document.querySelectorAll('.instance-checkbox:checked');
+        const selectAllCheckbox = document.getElementById('select-all');
+
+        selectAllCheckbox.checked = checkboxes.length > 0 && checkboxes.length === checkedBoxes.length;
+        selectAllCheckbox.indeterminate = checkedBoxes.length > 0 && checkboxes.length !== checkedBoxes.length;
+    }
+
+    // 更新批量操作按钮的可见性
+    function updateBatchActionsVisibility() {
+        const checkedBoxes = document.querySelectorAll('.instance-checkbox:checked');
+        const batchActions = document.querySelector('.batch-actions');
+
+        if (batchActions) {
+            batchActions.style.display = checkedBoxes.length > 0 ? 'block' : 'none';
+        }
+    }
+
+    // 批量操作函数
+    function batchAction(action) {
+        const instances = document.querySelectorAll('.instance-checkbox:checked');
+
+        if (!instances.length) {
+            showToast('请选择要操作的实例', 'warning');
+            return;
+        }
+
+        // 显示加载提示
+        const loadingToast = showToast('正在执行批量操作，请稍候...', 'info');
+
+        fetch('/instances/batch', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: action,
+                instances: Array.from(instances).map(checkbox => ({
+                    cloud: checkbox.getAttribute('data-cloud'),
+                    id: checkbox.getAttribute('data-id')
+                }))
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast('批量操作已完成', 'success');
+                    // 刷新实例列表
+                    fetchAllInstances(1);
+                } else {
+                    showToast(`批量操作失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`批量操作失败: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                if (loadingToast) {
+                    loadingToast.close();
+                }
+            });
+    }
+
+    // 执行批量操作
+    function executeBatchAction(instances, action) {
+        const total = instances.length;
+        let completed = 0;
+        let failed = 0;
+
+        showToast(`正在执行批量${getActionName(action)}操作...`, 'info');
+
+        instances.forEach(instance => {
+            performAction(instance.cloudName, instance.instanceId, action, false)
+                .then(success => {
+                    if (success) {
+                        completed++;
+                    } else {
+                        failed++;
+                    }
+                })
+                .catch(() => {
+                    failed++;
+                })
+                .finally(() => {
+                    if (completed + failed === total) {
+                        showToast(
+                            `批量操作完成：成功 ${completed} 个，失败 ${failed} 个`,
+                            failed === 0 ? 'success' : 'warning'
+                        );
+                        fetchAllInstances(1);
+                    }
+                });
+        });
+    }
+
+    // 确保页面有 toast 容器
+    document.addEventListener('DOMContentLoaded', function () {
+        if (!document.getElementById('toast-container')) {
+            const toastContainer = document.createElement('div');
+            toastContainer.id = 'toast-container';
+            toastContainer.style.position = 'fixed';
+            toastContainer.style.top = '20px';
+            toastContainer.style.right = '20px';
+            toastContainer.style.zIndex = '1050';
+            document.body.appendChild(toastContainer);
+        }
+    });
+
+    // 初始化卷管理相关事件
+    function initializeVolumeEventListeners() {
+        const volumeQueryBtn = document.getElementById('volume-query-btn');
+        const volumeCloudSelect = document.getElementById('volume-cloud-select');
+
+        // 加载云环境列表
+        fetch('/environments')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const options = data.data.map(env =>
+                        `<option value="${env}">${env}</option>`
+                    ).join('');
+                    if (volumeCloudSelect) {
+                        volumeCloudSelect.innerHTML = '<option value="">请选择云环境</option>' + options;
+                    }
+                }
+            })
+            .catch(error => {
+                showVolumeError('加载云环境列表失败');
+            });
+
+        if (volumeQueryBtn) {
+            volumeQueryBtn.addEventListener('click', () => fetchAllVolumes(1));
+        }
+
+        if (volumeCloudSelect) {
+            volumeCloudSelect.addEventListener('change', () => {
+                clearVolumeError();
+                if (volumeCloudSelect.value) {
+                    fetchAllVolumes(1);
+                }
+            });
+        }
+
+        // 添加过滤器变化事件
+        ['volume-name-search', 'volume-status-select', 'volume-size-search', 'volume-type-select'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                if (id === 'volume-name-search') {
+                    let timer;
+                    element.addEventListener('input', () => {
+                        if (volumeCloudSelect.value) {
+                            clearTimeout(timer);
+                            timer = setTimeout(() => {
+                                fetchAllVolumes(1);
+                            }, 500);
+                        }
+                    });
+                } else {
+                    element.addEventListener('change', () => {
+                        if (volumeCloudSelect.value) {
+                            fetchAllVolumes(1);
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    function fetchAllVolumes(page = 1) {
+        const queryBtn = document.getElementById('volume-query-btn');
+        const cloudName = document.getElementById('volume-cloud-select').value;
+
+        if (!cloudName) {
+            showVolumeError('请选择云环境');
+            return;
+        }
+
+        setLoading(queryBtn, true);
+        clearVolumeError();
+
+        const params = new URLSearchParams({
+            cloud_name: cloudName,
+            name: document.getElementById('volume-name-search')?.value || '',
+            status: document.getElementById('volume-status-select')?.value || '',
+            size: document.getElementById('volume-size-search')?.value || '',
+            type: document.getElementById('volume-type-select')?.value || '',
+            page: page,
+            per_page: 10
+        });
+
+        // 添加日志输出
+        console.log('Fetching volumes with params:', params.toString());
+
+        fetch(`/api/volumes?${params.toString()}`)  // 修改为 /api/volumes
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('网络响应不正常');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Received volume data:', data);  // 添加日志输出
+                if (data.status === 'success') {
+                    updateVolumeTable(data.data);
+                    updateVolumePagination(data.page, data.total_pages);
+                } else {
+                    throw new Error(data.message || '获取卷列表失败');
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching volumes:', error);  // 添加错误日志
+                showVolumeError('获取卷列表失败: ' + error.message);
+            })
+            .finally(() => {
+                setLoading(queryBtn, false);
+            });
+    }
+
+    function updateVolumeTable(volumes) {
+        const tbody = document.querySelector('#volumes-list tbody');
+        if (!tbody) return;
+
+        console.log('Updating volume table with:', volumes);  // 添加日志输出
+
+        if (!volumes || volumes.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center">暂无数据</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = volumes.map(volume => {
+            const attachments = volume.attachments.map(att =>
+                `${att.instance_name} (${att.device})`
+            ).join('<br>');
+
+            return `
+                <tr>
+                    <td>${volume.cloud || '-'}</td>
+                    <td>${volume.name || '-'}</td>
+                    <td>${volume.size || '-'}</td>
+                    <td><span class="label label-${getVolumeStatusClass(volume.status)}">${getVolumeStatusText(volume.status)}</span></td>
+                    <td>${volume.type || '-'}</td>
+                    <td>${attachments || '-'}</td>
+                    <td>${volume.created_at || '-'}</td>
+                    <td>${volume.availability_zone || '-'}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-default dropdown-toggle btn-sm"
+                                    data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                操作 <span class="caret"></span>
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a href="#" onclick="showVolumeExtendModal('${volume.cloud}', '${volume.id}', ${volume.size})">扩容</a></li>
+                                <li><a href="#" onclick="showVolumeSnapshotModal('${volume.cloud}', '${volume.id}', '${volume.name}')">
+                                <i class="fa fa-camera"></i> 创建快照
+                                 </a></li>
+                                <li><a href="#" onclick="showVolumeDeleteModal('${volume.cloud}', '${volume.id}', '${volume.name}')">删除</a></li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function getVolumeStatusClass(status) {
+        switch (status) {
+            case 'available':
+                return 'success';
+            case 'in-use':
+                return 'primary';
+            case 'error':
+                return 'danger';
+            default:
+                return 'default';
+        }
+    }
+
+    function getVolumeStatusText(status) {
+        switch (status) {
+            case 'available':
+                return '可用';
+            case 'in-use':
+                return '使用中';
+            case 'error':
+                return '错误';
+            default:
+                return status;
+        }
+    }
+
+    function getVolumeActionButtons(volume) {
+        let buttons = '';
+
+        if (volume.status === 'available') {
+            buttons += `
+                <li><a href="#" onclick="showVolumeExtendModal('${volume.cloud}', '${volume.id}', ${volume.size})">
+                    <i class="fa fa-expand"></i> 扩容
+                </a></li>
+                <li><a href="#" onclick="showVolumeSnapshotModal('${volume.cloud}', '${volume.id}', '${volume.name}')">
+                <i class="fa fa-camera"></i> 创建快照
+               </a></li>
+                <li><a href="#" onclick="showVolumeDeleteModal('${volume.cloud}', '${volume.id}', '${volume.name}')">
+                    <i class="fa fa-trash text-danger"></i> 删除
+                </a></li>
+            `;
+        }
+
+        return buttons;
+    }
+
+    function showVolumeExtendModal(cloudName, volumeId, currentSize) {
+        const modalHtml = `
+        <div class="modal fade" id="volumeExtendModal" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        <h4 class="modal-title">扩容存储卷</h4>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="newSize">新的卷大小 (GB)：</label>
+                            <input type="number" class="form-control" id="newSize" min="${currentSize}" value="${currentSize}">
+                            <small class="text-muted">新的大小必须大于当前大小 (${currentSize}GB)</small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="confirmExtendVolume('${cloudName}', '${volumeId}')">确认扩容</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+        // 添加模态框到页面
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // 显示模态框
+        $('#volumeExtendModal').modal('show');
+
+        // 模态框关闭时删除
+        $('#volumeExtendModal').on('hidden.bs.modal', function () {
+            $(this).remove();
+        });
+    }
+
+    function confirmExtendVolume(cloudName, volumeId) {
+        const newSize = document.getElementById('newSize').value;
+
+        if (!newSize || newSize <= 0) {
+            alert('请输入有效的大小');
+            return;
+        }
+
+        fetch(`/api/volumes/${cloudName}/${volumeId}/extend`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({new_size: parseInt(newSize)})
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    alert('扩容成功');
+                    $('#volumeExtendModal').modal('hide');
+                    fetchAllVolumes(1); // 刷新卷列表
+                } else {
+                    alert(`扩容失败: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                alert(`扩容请求失败: ${error.message}`);
+            });
+    }
+
+    function showVolumeDeleteModal(cloudName, volumeId, volumeName) {
+        const modalHtml = `
+            <div class="modal fade" id="volumeDeleteModal" tabindex="-1" role="dialog">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <button type="button" class="close" data-dismiss="modal">&times;</button>
+                            <h4 class="modal-title text-danger">
+                                <i class="fa fa-exclamation-triangle"></i> 删除确认
+                            </h4>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-danger">删除操作不可恢复，请谨慎操作！</p>
+                            <div class="form-group">
+                                <label for="volumeDeletePassword">请输入删除密码：</label>
+                                <input type="password" class="form-control" id="volumeDeletePassword" placeholder="请输入删除密码">
+                            </div>
+                            <div class="alert alert-warning">
+                                即将删除卷：${volumeName}
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                            <button type="button" class="btn btn-danger" onclick="confirmDeleteVolume('${cloudName}', '${volumeId}')">确认删除</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // 添加模态框到页面
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // 显示模态框
+        $('#volumeDeleteModal').modal('show');
+
+        // 模态框关闭时删除
+        $('#volumeDeleteModal').on('hidden.bs.modal', function () {
+            $(this).remove();
+        });
+    }
+
+    function confirmDeleteVolume(cloudName, volumeId) {
+        const password = document.getElementById('volumeDeletePassword').value;
+
+        if (!password) {
+            showToast('请输入删除密码', 'warning');
+            return;
+        }
+
+        // 验证密码
+        fetch('/verify-delete-password', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({password: password})
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // 获取删除token后执行删除操作
+                    fetch(`/volumes/${cloudName}/${volumeId}/delete`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${data.token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                        .then(response => response.json())
+                        .then(deleteData => {
+                            if (deleteData.status === 'success') {
+                                showToast('卷删除成功', 'success');
+                                $('#volumeDeleteModal').modal('hide');
+                                fetchAllVolumes(1);
+                            } else {
+                                showToast(`删除失败: ${deleteData.message}`, 'error');
+                            }
+                        })
+                        .catch(error => {
+                            showToast(`删除请求失败: ${error.message}`, 'error');
+                        });
+                } else {
+                    showToast(data.message || '密码验证失败', 'error');
+                }
+            })
+            .catch(error => {
+                showToast('密码验证请求失败', 'error');
+            });
+    }
+
+    function updateVolumePagination(currentPage, totalPages) {
+        const pagination = document.getElementById('volume-pagination');
+        if (!pagination) return;
+
+        pagination.innerHTML = '';
+
+        if (totalPages <= 1) return;
+
+        const pages = [];
+
+        // 添加上一页按钮
+        pages.push(`
+            <li class="${currentPage === 1 ? 'disabled' : ''}">
+                <a href="#" onclick="return fetchAllVolumes(${currentPage - 1})">&laquo;</a>
+            </li>
+        `);
+
+        // 添加页码按钮
+        for (let i = 1; i <= totalPages; i++) {
+            if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                pages.push(`
+                    <li class="${i === currentPage ? 'active' : ''}">
+                        <a href="#" onclick="return fetchAllVolumes(${i})">${i}</a>
+                    </li>
+                `);
+            } else if (i === currentPage - 3 || i === currentPage + 3) {
+                pages.push('<li class="disabled"><a href="#">...</a></li>');
+            }
+        }
+
+        // 添加下一页按钮
+        pages.push(`
+            <li class="${currentPage === totalPages ? 'disabled' : ''}">
+                <a href="#" onclick="return fetchAllVolumes(${currentPage + 1})">&raquo;</a>
+            </li>
+        `);
+
+        pagination.innerHTML = pages.join('');
+    }
+
+    function showVolumeError(message) {
+        const container = document.getElementById('volume-error-container');
+        if (container) {
+            container.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+    }
+
+    function clearVolumeError() {
+        const container = document.getElementById('volume-error-container');
+        if (container) {
+            container.innerHTML = '';
+        }
+    }
+
+    let currentConnectionId = null; // 当前连接的ID
+    let term; // xterm.js 终端实例
+
+    function exportVolumes() {
+        const cloudName = document.getElementById('volume-cloud-select').value;
+        if (!cloudName) {
+            showToast('请选择云环境', 'warning');
+            return;
+        }
+
+        const filters = {
+            name: document.getElementById('volume-name-search').value,
+            status: document.getElementById('volume-status-select').value,
+            size: document.getElementById('volume-size-search').value,
+            type: document.getElementById('volume-type-select').value,
+        };
+
+        const params = new URLSearchParams({
+            cloud_name: cloudName,
+            format: 'excel',
+            ...filters
+        });
+
+        fetch(`/volumes/export?${params.toString()}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('导出失败');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `volumes_${cloudName}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                showToast(`导出失败: ${error.message}`, 'error');
+            });
+    }
+
+    // 初始化终端
+    function initializeTerminal() {
+        if (term) {
+            term.dispose(); // 清理旧的终端实例
+        }
+
+        term = new Terminal({
+            cursorBlink: true, // 启用光标闪烁
+            theme: {
+                background: '#000000',
+                foreground: '#ffffff'
+            },
+            fontSize: 14,
+            fontFamily: 'Consolas, monospace',
+            rows: 30,
+            cols: 120
+        });
+
+        const terminalContainer = document.getElementById('terminal');
+        if (!terminalContainer) {
+            console.error('未找到终端容器');
+            return;
+        }
+
+        terminalContainer.style.height = '600px';
+        term.open(terminalContainer);
+        term.focus(); // 聚焦到终端
+
+        // 监听终端输入
+        term.onData(data => {
+            sendCommand(data); // 将输入发送到后端
+        });
+
+        // 初始化后写入提示符
+        term.write('$ '); // 显示提示符
+    }
+
+    // 卷快照模态框
+    function showVolumeSnapshotModal(cloudName, volumeId, volumeName) {
+        const modalHtml = `
+        <div class="modal fade" id="volumeSnapshotModal" tabindex="-1" role="dialog">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <button type="button" class="close" data-dismiss="modal">&times;</button>
+                        <h4 class="modal-title">创建卷快照</h4>
+                    </div>
+                    <div class="modal-body">
+                        <div class="form-group">
+                            <label for="snapshotName">快照名称：</label>
+                            <input type="text" class="form-control" id="snapshotName" placeholder="输入快照名称">
+                        </div>
+                        <div class="form-group">
+                            <label for="snapshotDescription">快照描述：</label>
+                            <textarea class="form-control" id="snapshotDescription" placeholder="输入快照描述"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-default" data-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="createVolumeSnapshot('${cloudName}', '${volumeId}')">创建快照</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+        // 添加模态框到页面
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+        // 显示模态框
+        $('#volumeSnapshotModal').modal('show');
+
+        // 模态框关闭时删除
+        $('#volumeSnapshotModal').on('hidden.bs.modal', function () {
+            $(this).remove();
+        });
+    }
+
+    // 创建卷快照
+    function createVolumeSnapshot(cloudName, volumeId) {
+        const snapshotName = document.getElementById('snapshotName').value;
+        const snapshotDescription = document.getElementById('snapshotDescription').value;
+
+        if (!snapshotName) {
+            showToast('请输入快照名称', 'warning');
+            return;
+        }
+
+        fetch(`/api/volumes/${cloudName}/${volumeId}/snapshots`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                name: snapshotName,
+                description: snapshotDescription
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast('快照创建成功', 'success');
+                    $('#volumeSnapshotModal').modal('hide');
+                    fetchAllVolumes(1); // 刷新卷列表
+                } else {
+                    showToast(`快照创建失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`快照创建失败: ${error.message}`, 'error');
+            });
+    }
+
+    function loadVolumeSnapshots(cloudName, volumeId) {
+        fetch(`/api/volumes/${cloudName}/${volumeId}/snapshots`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const snapshotList = document.getElementById('snapshot-list');
+                    snapshotList.innerHTML = data.data.map(snapshot => `
+                    <div class="snapshot-item">
+                        <strong>${snapshot.name}</strong> - ${snapshot.description || '无描述'}
+                        <button class="btn btn-xs btn-danger" onclick="deleteSnapshot('${cloudName}', '${volumeId}', '${snapshot.id}')">
+                            删除
+                        </button>
+                    </div>
+                `).join('');
+                } else {
+                    showToast(`加载快照失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`加载快照失败: ${error.message}`, 'error');
+            });
+    }
+
+    function deleteSnapshot(cloudName, volumeId, snapshotId) {
+        if (confirm('确定要删除这个快照吗？')) {
+            fetch(`/api/volumes/${cloudName}/${volumeId}/snapshots/${snapshotId}`, {
+                method: 'DELETE'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showToast('快照删除成功', 'success');
+                        loadVolumeSnapshots(cloudName, volumeId); // 刷新快照列表
+                    } else {
+                        showToast(`快照删除失败: ${data.message}`, 'error');
+                    }
+                })
+                .catch(error => {
+                    showToast(`快照删除失败: ${error.message}`, 'error');
+                });
+        }
+    }
+
+    // 连接 SSH
+    function connectSSH(connectionId) {
+        currentConnectionId = connectionId;
+
+        fetch(`/api/ssh/connect/${connectionId}`, {
+            method: 'POST'
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast('SSH 连接成功', 'success');
+                    document.querySelector('.connection-list').style.display = 'none';
+                    document.getElementById('terminal-container').style.display = 'block';
+                    initializeTerminal();
+                } else {
+                    showToast(`SSH 连接失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`SSH 连接失败: ${error.message}`, 'error');
+            });
+    }
+
+    // 发送命令
+    function sendCommand(command) {
+        if (!currentConnectionId) {
+            showToast('未连接到 SSH', 'error');
+            return;
+        }
+
+        fetch(`/api/ssh/shell/${currentConnectionId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({command: command})
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    term.write(data.output); // 显示命令输出
+                } else {
+                    showToast(`命令执行失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`命令发送失败: ${error.message}`, 'error');
+            });
+    }
+
+
+    // 关闭 SSH 连接
+    function disconnectSSH() {
+        if (!currentConnectionId) {
+            return;
+        }
+
+        fetch(`/api/ssh/close/${currentConnectionId}`, {
+            method: 'POST'
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast('SSH 连接已关闭', 'info');
+                    document.getElementById('terminal-container').style.display = 'none';
+                    document.querySelector('.connection-list').style.display = 'block';
+                    currentConnectionId = null;
+                } else {
+                    showToast(`关闭 SSH 连接失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`关闭 SSH 连接失败: ${error.message}`, 'error');
+            });
+    }
+
+    // SSH连接管理相关函数
+    // 加载 SSH 连接列表
+    function loadConnections() {
+        fetch('/api/ssh/connections')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const tbody = document.getElementById('connection-list');
+                    tbody.innerHTML = data.data.map(conn => `
+                <tr>
+                    <td>${conn.name}</td>
+                    <td>${conn.host}</td>
+                    <td>${conn.port}</td>
+                    <td>${conn.username}</td>
+                    <td>${conn.description || '-'}</td>
+                    <td>
+                        <button class="btn btn-xs btn-primary" onclick="connectSSH(${conn.id})">
+                            连接
+                        </button>
+                        <button class="btn btn-xs btn-info" onclick="editConnection(${conn.id})">
+                            编辑
+                        </button>
+                        <button class="btn btn-xs btn-danger" onclick="deleteConnection(${conn.id})">
+                            删除
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+                }
+            });
+    }
+
+    // 显示新建连接模态框
+    function showNewConnectionModal() {
+        // 获取 DOM 元素
+        const connectionIdInput = document.getElementById('connection-id');
+        const connectionForm = document.getElementById('connection-form');
+
+        if (!connectionIdInput || !connectionForm) {
+            console.error("找不到模态框元素");
+            return;
+        }
+
+        // 清空表单
+        connectionIdInput.value = '';
+        connectionForm.reset();
+
+        // 显示模态框
+        $('#connectionModal').modal('show');
+    }
+
+    function editConnection(id) {
+        fetch(`/api/ssh/connections/${id}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const conn = data.data;
+                    document.getElementById('connection-id').value = conn.id;
+                    document.getElementById('connection-name').value = conn.name;
+                    document.getElementById('connection-host').value = conn.host;
+                    document.getElementById('connection-port').value = conn.port;
+                    document.getElementById('connection-username').value = conn.username;
+                    document.getElementById('connection-password').value = conn.password;
+                    document.getElementById('connection-description').value = conn.description;
+                    $('#connectionModal').modal('show');
+                }
+            });
+    }
+
+    // 保存 SSH 连接
+    function saveConnection() {
+        const id = document.getElementById('connection-id').value;
+        const data = {
+            name: document.getElementById('connection-name').value,
+            host: document.getElementById('connection-host').value,
+            port: document.getElementById('connection-port').value,
+            username: document.getElementById('connection-username').value,
+            password: document.getElementById('connection-password').value,
+            description: document.getElementById('connection-description').value
+        };
+
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? `/api/ssh/connections/${id}` : '/api/ssh/connections';
+
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast('保存成功', 'success');
+                    $('#connectionModal').modal('hide');
+                    loadConnections();
+                } else {
+                    showToast(data.message || '保存失败', 'error');
+                }
+            });
+    }
+
+    // 删除 SSH 连接
+    function deleteConnection(id) {
+        if (confirm('确定要删除这个连接吗？')) {
+            fetch(`/api/ssh/connections/${id}`, {
+                method: 'DELETE'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        showToast('删除成功', 'success');
+                        loadConnections();
+                    } else {
+                        showToast(data.message || '删除失败', 'error');
+                    }
+                });
+        }
+    }
+
+    function testConnection() {
+        // 获取表单数据
+        const connectionData = {
+            host: document.getElementById('connection-host').value,
+            port: document.getElementById('connection-port').value,
+            username: document.getElementById('connection-username').value,
+            password: document.getElementById('connection-password').value
+        };
+
+        // 验证必填字段
+        if (!connectionData.host || !connectionData.port || !connectionData.username || !connectionData.password) {
+            showToast('请填写所有必填字段', 'warning');
+            return;
+        }
+
+        // 显示加载提示
+        const loadingToast = showToast('正在测试连接，请稍候...', 'info');
+
+        // 发送测试连接请求
+        fetch('/api/ssh/test-connection', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(connectionData)
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast('连接测试成功！', 'success');
+                } else {
+                    showToast(`连接测试失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`连接测试失败: ${error.message}`, 'error');
+            })
+            .finally(() => {
+                if (loadingToast) {
+                    loadingToast.close();
+                }
+            });
+    }
+
+    // 显示创建实例模态框
+    function showCreateInstanceModal() {
+        console.log('Create instance modal opened'); // 调试日志
+        // 清空表单
+        document.getElementById('create-instance-form').reset();
+
+        // 加载云环境列表
+        loadCloudEnvironmentsForCreate();
+
+        // 显示模态框
+        $('#createInstanceModal').modal('show');
+
+        // 确保事件绑定正确
+        $('#createInstanceModal').on('shown.bs.modal', function () {
+            const cloudSelect = document.getElementById('create-cloud-select');
+            if (cloudSelect) {
+                console.log('create-cloud-select element found'); // 调试日志
+
+                // 绑定 change 事件
+                cloudSelect.addEventListener('change', function () {
+                    console.log('Cloud select change event triggered'); // 调试日志
+                    const cloudName = this.value;
+                    if (cloudName) {
+                        console.log('Cloud selected:', cloudName); // 调试日志
+                        loadFlavors(cloudName);
+                        loadImages(cloudName);
+                        loadNetworks(cloudName);
+                        loadKeypairs(cloudName);
+                        loadSecurityGroups(cloudName);
+                    }
+                });
+
+                // 手动触发 change 事件
+                cloudSelect.dispatchEvent(new Event('change'));
+            } else {
+                console.error('create-cloud-select element not found'); // 调试日志
+            }
+        });
+    }
+
+
+    // 加载云环境列表
+    function loadCloudEnvironmentsForCreate() {
+        const select = document.getElementById('create-cloud-select');
+        select.innerHTML = '<option value="">加载中...</option>';
+
+        fetch('/api/clouds')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    select.innerHTML = '<option value="">请选择云环境</option>';
+                    data.data.forEach(cloud => {
+                        const option = document.createElement('option');
+                        option.value = cloud;
+                        option.textContent = cloud;
+                        select.appendChild(option);
+                    });
+                } else {
+                    throw new Error(data.message || '获取云环境列表失败');
+                }
+            })
+            .catch(error => {
+                select.innerHTML = '<option value="">加载失败</option>';
+                showToast('加载云环境列表失败: ' + error.message, 'error');
+            });
+    }
+
+    // 显示创建实例模态框
+    function showCreateInstanceModal() {
+        // 清空表单
+        document.getElementById('create-instance-form').reset();
+
+        // 加载云环境列表
+        loadCloudEnvironmentsForCreate();
+
+        // 显示模态框
+        $('#createInstanceModal').modal('show');
+    }
+
+    // 加载云环境列表
+    function loadCloudEnvironmentsForCreate() {
+        const select = document.getElementById('create-cloud-select');
+        select.innerHTML = '<option value="">加载中...</option>';
+
+        fetch('/api/clouds')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    select.innerHTML = '<option value="">请选择云环境</option>';
+                    data.data.forEach(cloud => {
+                        const option = document.createElement('option');
+                        option.value = cloud;
+                        option.textContent = cloud;
+                        select.appendChild(option);
+                    });
+                } else {
+                    throw new Error(data.message || '获取云环境列表失败');
+                }
+            })
+            .catch(error => {
+                select.innerHTML = '<option value="">加载失败</option>';
+                showToast('加载云环境列表失败: ' + error.message, 'error');
+            });
+    }
+
+    // 创建实例
+    function createInstance() {
+        const cloudName = document.getElementById('create-cloud-select').value;
+        const instanceName = document.getElementById('instance-name').value;
+        const flavorId = document.getElementById('flavor-select').value;
+        const imageId = document.getElementById('image-select').value;
+        const networkId = document.getElementById('network-select').value;
+        const keyName = document.getElementById('keypair-select').value;
+        const securityGroups = Array.from(document.getElementById('security-groups').selectedOptions)
+            .map(option => option.value);
+
+        if (!cloudName || !instanceName || !flavorId || !imageId || !networkId) {
+            showToast('请填写所有必填字段', 'warning');
+            return;
+        }
+
+        const data = {
+            cloud_name: cloudName,
+            instance_name: instanceName,
+            flavor_id: flavorId,
+            image_id: imageId,
+            network_id: networkId,
+            key_name: keyName,
+            security_groups: securityGroups
+        };
+
+        fetch('/api/instances/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast('实例创建成功', 'success');
+                    $('#createInstanceModal').modal('hide');
+                    fetchAllInstances(1); // 刷新实例列表
+                } else {
+                    showToast(`实例创建失败: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                showToast(`实例创建失败: ${error.message}`, 'error');
+            });
+    }
+
+    // 加载实例类型
+    function loadFlavors(cloudName) {
+        console.log('Loading flavors for cloud:', cloudName); // 调试日志
+        const select = document.getElementById('flavor-select');
+        select.innerHTML = '<option value="">加载中...</option>';
+
+        fetch(`/api/flavors?cloud_name=${cloudName}`)
+            .then(response => {
+                console.log('Flavors response:', response); // 调试日志
+                if (!response.ok) {
+                    throw new Error('网络响应不正常');
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Flavors data:', data); // 调试日志
+                if (data.status === 'success') {
+                    select.innerHTML = '<option value="">请选择实例类型</option>';
+                    data.data.forEach(flavor => {
+                        const option = document.createElement('option');
+                        option.value = flavor.id;
+                        option.textContent = flavor.name;
+                        select.appendChild(option);
+                    });
+                } else {
+                    throw new Error(data.message || '获取实例类型失败');
+                }
+            })
+            .catch(error => {
+                console.error('Error loading flavors:', error); // 调试日志
+                select.innerHTML = '<option value="">加载失败</option>';
+                showToast('加载实例类型失败: ' + error.message, 'error');
+            });
+    }
+
+    // 加载镜像
+    function loadImages(cloudName) {
+        const select = document.getElementById('image-select');
+        select.innerHTML = '<option value="">加载中...</option>';
+
+        fetch(`/api/images?cloud_name=${cloudName}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    select.innerHTML = '<option value="">请选择镜像</option>';
+                    data.data.forEach(image => {
+                        const option = document.createElement('option');
+                        option.value = image.id;
+                        option.textContent = image.name;
+                        select.appendChild(option);
+                    });
+                } else {
+                    throw new Error(data.message || '获取镜像失败');
+                }
+            })
+            .catch(error => {
+                select.innerHTML = '<option value="">加载失败</option>';
+                showToast('加载镜像失败: ' + error.message, 'error');
+            });
+    }
+
+    // 加载网络
+    function loadNetworks(cloudName) {
+        const select = document.getElementById('network-select');
+        select.innerHTML = '<option value="">加载中...</option>';
+
+        fetch(`/api/networks?cloud_name=${cloudName}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    select.innerHTML = '<option value="">请选择网络</option>';
+                    data.data.forEach(network => {
+                        const option = document.createElement('option');
+                        option.value = network.id;
+                        option.textContent = network.name;
+                        select.appendChild(option);
+                    });
+                } else {
+                    throw new Error(data.message || '获取网络失败');
+                }
+            })
+            .catch(error => {
+                select.innerHTML = '<option value="">加载失败</option>';
+                showToast('加载网络失败: ' + error.message, 'error');
+            });
+    }
+
+    // 加载密钥对
+    function loadKeypairs(cloudName) {
+        const select = document.getElementById('keypair-select');
+        select.innerHTML = '<option value="">加载中...</option>';
+
+        fetch(`/api/keypairs?cloud_name=${cloudName}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    select.innerHTML = '<option value="">无</option>';
+                    data.data.forEach(keypair => {
+                        const option = document.createElement('option');
+                        option.value = keypair.name;
+                        option.textContent = keypair.name;
+                        select.appendChild(option);
+                    });
+                } else {
+                    throw new Error(data.message || '获取密钥对失败');
+                }
+            })
+            .catch(error => {
+                select.innerHTML = '<option value="">加载失败</option>';
+                showToast('加载密钥对失败: ' + error.message, 'error');
+            });
+    }
+
+    // 加载安全组
+    function loadSecurityGroups(cloudName) {
+        const select = document.getElementById('security-groups');
+        select.innerHTML = '<option value="">加载中...</option>';
+
+        fetch(`/api/security-groups?cloud_name=${cloudName}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    select.innerHTML = '';
+                    data.data.forEach(group => {
+                        const option = document.createElement('option');
+                        option.value = group.name;
+                        option.textContent = group.name;
+                        select.appendChild(option);
+                    });
+                } else {
+                    throw new Error(data.message || '获取安全组失败');
+                }
+            })
+            .catch(error => {
+                select.innerHTML = '<option value="">加载失败</option>';
+                showToast('加载安全组失败: ' + error.message, 'error');
+            });
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,13 @@
+Flask==2.0.1
+python-novaclient==18.1.0
+python-cinderclient>=8.0.0
+openstacksdk
+keystoneauth1==4.3.1
+PyYAML
+pandas
+paramiko==2.11.0
+websockets==10.3
+pytz==2021.3
+Jinja2==3.0.1
+Werkzeug==2.0.1
+jwt

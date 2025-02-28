@@ -1,0 +1,65 @@
+{
+  "openstack_environments": {
+    "openstack-207": {
+      "auth_url": "http://192.168.2.207:5000/v3",
+      "username": "admin",
+      "password": "123456",
+      "project_name": "admin",
+      "user_domain_name": "Default",
+      "project_domain_name": "Default"
+    },
+    "openstack-205": {
+      "auth_url": "http://192.168.2.205:5000/v3",
+      "username": "admin",
+      "password": "123456",
+      "project_name": "admin",
+      "user_domain_name": "Default",
+      "project_domain_name": "Default"
+    },
+    "openstack-200": {
+      "auth_url": "http://192.168.2.200:5000/v3",
+      "username": "admin",
+      "password": "openstack@123",
+      "project_name": "admin",
+      "user_domain_name": "Default",
+      "project_domain_name": "Default"
+    },
+    "openstack-253": {
+      "auth_url": "http://192.168.2.253:5000/v3",
+      "username": "admin",
+      "password": "123456",
+      "project_name": "admin",
+      "user_domain_name": "Default",
+      "project_domain_name": "Default"
+    },
+    "openstack-202": {
+      "auth_url": "http://192.168.2.202:5000/v3",
+      "username": "admin",
+      "password": "Hbis@xa202",
+      "project_name": "admin",
+      "user_domain_name": "Default",
+      "project_domain_name": "Default"
+    },
+    "openstack-100.1": {
+      "auth_url": "http://192.168.100.1:5000/v3",
+      "username": "admin",
+      "password": "Hbisdt@12345",
+      "project_name": "admin",
+      "user_domain_name": "Default",
+      "project_domain_name": "Default"
+    },
+    "openstack-100.11": {
+      "auth_url": "http://192.168.100.11:5000/v3",
+      "username": "admin",
+      "password": "Hbisdt@12345",
+      "project_name": "admin",
+      "user_domain_name": "Default",
+      "project_domain_name": "Default"
+    }
+  },
+  "security": {
+    "delete_password": "2524354300",
+    "delete_password_expires": 3600
+  },
+  "page_password": "2524354300"
+}

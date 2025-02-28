@@ -1,0 +1,29 @@
+  /* 隐藏页面内容 */
+        .content {
+            display: none;
+        }
+
+        /* 密码输入框样式 */
+        .password-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .password-container input {
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        .password-container button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+
+        .error-message {
+            color: red;
+            margin-top: 10px;
+        }
