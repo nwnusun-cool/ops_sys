@@ -36,7 +36,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 加载配置文件
-config_path = Path("config/config.json")
+# 获取当前脚本所在的目录
+base_dir = os.path.dirname(os.path.abspath(__file__))
+config_path = os.path.join(base_dir, "config", "config.json")
+
 with open(config_path, "r") as f:
     config = yaml.safe_load(f)
 
