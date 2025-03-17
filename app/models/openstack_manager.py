@@ -76,7 +76,7 @@ class OpenstackManager(object):
         self._init_clients()
         self.instance_cache = {}
         self.volume_cache = {}  # 添加卷缓存
-        self.cache_timeout = timedelta(minutes=5)
+        self.cache_timeout = timedelta(seconds=1)
         self.last_cache_update = {}
 
     def _init_clients(self):
@@ -523,6 +523,19 @@ class OpenstackManager(object):
                 if not new_size:
                     raise ValueError("未指定新的卷大小")
                 volume.extend(volume, new_size)
+                # 等待卷状态为 available，60s为超时
+                import time
+                start_time = time.time()
+                while time.time() - start_time < 60:
+                    volume = self.cinder_clients[cloud_name].volumes.get(volume_id)
+                    if volume.status == "available":
+                        break
+                    time.sleep(1)
+
+                # 如果状态仍然是extending，强制刷新
+                if volume.status != "available":
+                    raise ValueError("卷扩展操作失败")
+
                 message = f"卷大小调整为 {new_size}GB"
             else:
                 raise ValueError(f"不支持的操作: {action}")
@@ -583,6 +596,19 @@ class OpenstackManager(object):
 
             # 执行扩容操作
             self.cinder_clients[cloud_name].volumes.extend(volume, new_size)
+
+            # 等待状态更新
+            import time
+            start_time = time.time()
+            while time.time() - start_time < 60:  # 最多等待5分钟
+                volume = self.cinder_clients[cloud_name].volumes.get(volume_id)
+                if volume.status == "available":
+                    break
+                time.sleep(5)
+
+            # 如果状态仍然是extending，强制刷新
+            if volume.status == "extending":
+                volume = self.cinder_clients[cloud_name].volumes.get(volume_id, force=True)
 
             # 清除缓存
             if cloud_name in self.volume_cache:

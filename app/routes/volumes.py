@@ -58,8 +58,6 @@ def get_volumes():
     logger.info(f"Found {len(result.get('data', []))} volumes after filtering")
     return jsonify({"status": "success", **result})
 
-# 其他卷相关路由方法保持不变，此处省略...
-
 @volumes_bp.route("/<cloud_name>/<volume_id>", methods=["GET"])
 @error_handler
 def get_volume(cloud_name, volume_id):
@@ -164,20 +162,30 @@ def generate_delete_token(generate_delete_token:str):
 @error_handler
 def perform_volume_action(cloud_name, volume_id, action):
     """执行卷操作"""
-    data = request.get_json() or {}
+    try:
+        data = request.get_json(silent=True) or {}
+    except Exception as e:
+        logger.warning(f"Failed to parse JSON data: {str(e)}")
+        data = {}
 
     # 如果是删除操作，验证token
     if action == "delete":
         auth_header = request.headers.get("Authorization")
+        
         if not auth_header or not auth_header.startswith("Bearer "):
+            logger.error("Missing or invalid Authorization header")
             return jsonify({"status": "error", "message": "缺少授权token"}), 401
 
         token = auth_header.split(" ")[1]
+        logger.warning(f"Received token: {token}    type: {type(token)}")
         try:
-            jwt.decode(token, app.config["SECRET_KEY"], algorithms=["HS256"])
+            # 使用SECRET_KEY验证token
+            jwt.decode(token, str(SECURITY['delete_password']), algorithms=["HS256"])
         except jwt.ExpiredSignatureError:
+            logger.error("Delete token expired")
             return jsonify({"status": "error", "message": "删除授权已过期"}), 401
         except jwt.InvalidTokenError:
+            logger.error("Invalid delete token")
             return jsonify({"status": "error", "message": "无效的删除授权"}), 401
 
     result = manager.perform_volume_action(cloud_name, volume_id, action, **data)

@@ -35,7 +35,7 @@
     "openstack-202": {
       "auth_url": "http://192.168.2.202:5000/v3",
       "username": "admin",
-      "password": "Hbis@xa202",
+      "password": "HbisDT@12345",
       "project_name": "admin",
       "user_domain_name": "Default",
       "project_domain_name": "Default"
