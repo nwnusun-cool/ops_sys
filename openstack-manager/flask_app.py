@@ -768,7 +768,7 @@ def performance_logger(f):
 @app.route("/api/clouds", methods=["GET"])
 @error_handler
 @performance_logger
-@cache_with_timeout(timeout=300)
+@cache_with_timeout(timeout=10)
 def list_clouds():
     """获取云环境列表"""
     return jsonify({"status": "success", "data": list(CLOUDS.keys())})
@@ -804,7 +804,7 @@ def index():
 # 优化环境列表接口
 @app.route("/environments", methods=["GET"])
 @error_handler
-@cache_with_timeout(timeout=300)
+@cache_with_timeout(timeout=10)
 def list_environments():
     """获取所有 OpenStack 环境"""
     environments = list(CLOUDS.keys())
