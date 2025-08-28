@@ -1,0 +1,607 @@
+{% extends "base.html" %}
+
+{% block title %}网络管理 - {{ super() }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 页面头部 - Material Design 3.0 */
+    .page-header {
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        padding: 32px;
+        margin-bottom: 32px;
+        box-shadow: var(--elevation-1);
+        border-left: 4px solid var(--primary);
+    }
+    
+    .page-title {
+        font-family: 'Google Sans', sans-serif;
+        font-weight: 400;
+        font-size: 1.75rem;
+        color: var(--text-primary);
+        margin: 0;
+        display: flex;
+        align-items: center;
+    }
+    
+    .page-title i {
+        color: var(--primary);
+        margin-right: 16px;
+    }
+    
+    /* 网络卡片 - Material Design 3.0 */
+    .network-card {
+        transition: var(--transition-decelerate);
+        border: none;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        position: relative;
+        background: var(--surface);
+        box-shadow: var(--elevation-1);
+        border: 1px solid var(--outline-variant);
+    }
+    
+    .network-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 4px;
+        background: var(--outline);
+        transition: var(--transition-standard);
+    }
+    
+    .network-card.status-active::before {
+        background: var(--secondary);
+    }
+    
+    .network-card.status-down::before {
+        background: var(--error);
+    }
+    
+    .network-card.external::before {
+        background: var(--primary);
+    }
+    
+    .network-card:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--elevation-3);
+    }
+    
+    .network-actions {
+        opacity: 0;
+        transition: var(--transition-decelerate);
+        transform: translateY(8px);
+    }
+    
+    .network-card:hover .network-actions {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    
+    /* 统计概览 */
+    .stats-overview {
+        margin-bottom: 32px;
+    }
+    
+    /* 加载指示器 */
+    .loading-spinner {
+        display: none;
+        padding: 80px 0;
+    }
+    
+    .loading-spinner .spinner-border {
+        width: 3rem;
+        height: 3rem;
+        border-width: 3px;
+        color: var(--primary);
+    }
+    
+    /* 子网信息 */
+    .subnet-info {
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+        background: var(--surface-container);
+        padding: 12px;
+        border-radius: var(--radius-sm);
+        margin-top: 16px;
+        border: 1px solid var(--outline-variant);
+    }
+    
+    /* 状态徽章 */
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        border-radius: var(--radius-xl);
+        font-weight: 500;
+        letter-spacing: 0.1px;
+    }
+    
+    /* 网络类型徽章 */
+    .network-type-badge {
+        position: relative;
+        overflow: hidden;
+        transition: var(--transition-standard);
+    }
+    
+    .network-type-badge:hover {
+        transform: scale(1.05);
+    }
+    
+    /* 空状态 */
+    .empty-state {
+        padding: 80px 40px;
+        text-align: center;
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--elevation-1);
+        border: 1px solid var(--outline-variant);
+    }
+    
+    .empty-state i {
+        font-size: 4rem;
+        color: var(--outline);
+        margin-bottom: 24px;
+        display: block;
+    }
+    
+    .empty-state h5 {
+        color: var(--text-primary);
+        font-family: 'Google Sans', sans-serif;
+        font-weight: 500;
+        margin-bottom: 8px;
+    }
+    
+    .empty-state p {
+        color: var(--text-secondary);
+        margin: 0;
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
+        <h1 class="page-title">
+            <i class="fas fa-network-wired me-3"></i>网络管理
+        </h1>
+        <div class="btn-toolbar">
+            <div class="btn-group me-2">
+                <button type="button" class="btn btn-success" onclick="showCreateNetworkModal()">
+                    <i class="fas fa-plus me-2"></i>创建网络
+                </button>
+            </div>
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-primary" onclick="refreshNetworks()">
+                    <i class="fas fa-sync-alt me-2"></i>刷新
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 加载指示器 -->
+<div id="loadingIndicator" class="text-center py-4 loading-spinner">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">加载中...</span>
+    </div>
+    <p class="mt-2 text-muted">正在加载网络信息...</p>
+</div>
+
+<!-- 集群选择和统计概览 -->
+<div class="stats-overview">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <label class="form-label">选择集群</label>
+                    <select class="form-select" id="clusterSelect" onchange="onClusterChange()">
+                        <option value="">加载中...</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats primary">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-network-wired fa-2x me-3"></i>
+                        <div>
+                            <h5 class="card-title mb-0">总网络数</h5>
+                            <h2 class="mb-0" id="totalNetworks">-</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats success">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-globe fa-2x me-3"></i>
+                        <div>
+                            <h5 class="card-title mb-0">外部网络</h5>
+                            <h2 class="mb-0" id="externalNetworks">-</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats warning">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-shield-alt fa-2x me-3"></i>
+                        <div>
+                            <h5 class="card-title mb-0">内部网络</h5>
+                            <h2 class="mb-0" id="internalNetworks">-</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 网络列表 -->
+<div class="card" id="networksCard" style="display: none;">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-list me-2"></i>网络列表
+            <span class="badge bg-secondary ms-2" id="networkCount">0</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        <div id="networksContainer" class="row">
+            <!-- 网络卡片将通过JavaScript动态加载 -->
+        </div>
+        
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <i class="fas fa-network-wired"></i>
+            <h5>没有找到网络</h5>
+            <p>选择一个集群开始管理网络</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentClusterId = null;
+    let currentPage = 1;
+    let isLoading = false;
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, attempting to load clusters...');
+        loadClusters();
+    });
+
+    // 加载集群列表
+    async function loadClusters() {
+        try {
+            console.log('Loading clusters...');
+            const response = await fetch('/api/clusters');
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('Response data:', data);
+            
+            if (data.success) {
+                const select = document.getElementById('clusterSelect');
+                console.log('ClusterSelect element:', select);
+                if (!select) {
+                    console.error('clusterSelect element not found!');
+                    return;
+                }
+                select.innerHTML = '<option value="">所有集群</option>';
+                console.log('Setting clusters data, length:', data.data.length);
+                
+                let firstConnectedCluster = null;
+                
+                data.data.forEach(cluster => {
+                    const option = document.createElement('option');
+                    option.value = cluster.id;
+                    option.textContent = `${cluster.name} (${cluster.connection_status})`;
+                    if (cluster.connection_status !== 'connected') {
+                        option.disabled = true;
+                        option.textContent += ' - 连接失败';
+                    } else if (!firstConnectedCluster) {
+                        firstConnectedCluster = cluster;
+                    }
+                    select.appendChild(option);
+                });
+                
+                // 自动选择第一个可用集群
+                if (firstConnectedCluster) {
+                    select.value = firstConnectedCluster.id;
+                    currentClusterId = firstConnectedCluster.id;
+                    onClusterChange();
+                }
+            } else {
+                console.error('API response not successful:', data);
+                showAlert('加载集群失败: ' + (data.error || '未知错误'), 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading clusters:', error);
+            console.error('Full error details:', error);
+            showAlert('加载集群列表失败: ' + error.message, 'danger');
+        }
+    }
+
+    // 集群选择变化
+    function onClusterChange() {
+        const select = document.getElementById('clusterSelect');
+        const selectedValue = select.value;
+        currentClusterId = selectedValue ? parseInt(selectedValue) : null;
+        
+        console.log('Cluster changed to:', currentClusterId);
+        
+        if (currentClusterId) {
+            loadNetworks();
+        } else {
+            clearNetworksList();
+        }
+    }
+
+    // 加载网络列表
+    async function loadNetworks() {
+        if (!currentClusterId) return;
+        
+        showLoading(true);
+        
+        try {
+            console.log('Loading networks for cluster:', currentClusterId);
+            const response = await fetch(`/api/networks?cluster_id=${currentClusterId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                console.log('Networks loaded:', data.data);
+                updateStatistics(data.statistics);
+                renderNetworks(data.data);
+                document.getElementById('networksCard').style.display = 'block';
+            } else {
+                console.error('Failed to load networks:', data.error);
+                showAlert('加载网络失败: ' + data.error, 'danger');
+                clearNetworksList();
+            }
+        } catch (error) {
+            console.error('Error loading networks:', error);
+            showAlert('网络错误，请检查连接', 'danger');
+            clearNetworksList();
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 更新统计信息
+    function updateStatistics(statistics) {
+        document.getElementById('totalNetworks').textContent = statistics.total_networks;
+        document.getElementById('externalNetworks').textContent = statistics.type_counts?.external || 0;
+        document.getElementById('internalNetworks').textContent = statistics.type_counts?.internal || 0;
+    }
+
+    // 渲染网络列表
+    function renderNetworks(networks) {
+        const container = document.getElementById('networksContainer');
+        const emptyState = document.getElementById('emptyState');
+        const networkCount = document.getElementById('networkCount');
+        
+        if (!networks || networks.length === 0) {
+            container.innerHTML = '';
+            emptyState.style.display = 'block';
+            networkCount.textContent = '0';
+            return;
+        }
+        
+        emptyState.style.display = 'none';
+        networkCount.textContent = networks.length;
+        
+        container.innerHTML = networks.map(network => `
+            <div class="col-md-6 col-lg-4 mb-3">
+                <div class="card network-card ${network.status.toLowerCase() === 'active' ? 'status-active' : 'status-down'} ${network.external ? 'external' : ''}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h6 class="card-title mb-2">${escapeHtml(network.name)}</h6>
+                            <span class="status-badge badge ${getStatusBadgeClass(network.status)}">${network.status}</span>
+                        </div>
+                        
+                        <p class="card-text">
+                            <small class="text-muted">${network.id}</small>
+                        </p>
+                        
+                        ${network.description ? `
+                            <p class="card-text">
+                                <small>${escapeHtml(network.description)}</small>
+                            </p>
+                        ` : ''}
+                        
+                        <div class="mb-3">
+                            <span class="badge network-type-badge ${network.external ? 'bg-primary' : 'bg-secondary'} me-2">
+                                <i class="fas ${network.external ? 'fa-globe' : 'fa-home'} me-1"></i>
+                                ${network.external ? '外部网络' : '内部网络'}
+                            </span>
+                            ${network.shared ? '<span class="badge network-type-badge bg-info me-2"><i class="fas fa-share-alt me-1"></i>共享</span>' : ''}
+                            ${network.admin_state_up ? '<span class="badge network-type-badge bg-success"><i class="fas fa-check-circle me-1"></i>已启用</span>' : '<span class="badge network-type-badge bg-warning"><i class="fas fa-pause-circle me-1"></i>已禁用</span>'}
+                        </div>
+                        
+                        ${network.subnets && network.subnets.length > 0 ? `
+                            <div class="subnet-info">
+                                <strong>子网 (${network.subnets.length}):</strong>
+                                <div class="mt-1">
+                                    ${network.subnets.slice(0, 3).map(subnet => `
+                                        <small class="d-block">• ${escapeHtml(subnet.name)} (${subnet.cidr})</small>
+                                    `).join('')}
+                                    ${network.subnets.length > 3 ? `<small class="text-muted">还有 ${network.subnets.length - 3} 个子网...</small>` : ''}
+                                </div>
+                            </div>
+                        ` : '<div class="subnet-info"><small class="text-muted">无子网</small></div>'}
+                        
+                        <div class="network-actions mt-3">
+                            <button type="button" class="btn btn-sm btn-outline-info me-1" onclick="showNetworkDetail('${network.id}')" title="查看详情">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary me-1" onclick="editNetwork('${network.id}')" title="编辑">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteNetwork('${network.id}', '${escapeHtml(network.name)}')" title="删除">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // 清除网络列表
+    function clearNetworksList() {
+        const container = document.getElementById('networksContainer');
+        const emptyState = document.getElementById('emptyState');
+        const networkCount = document.getElementById('networkCount');
+        
+        container.innerHTML = '';
+        emptyState.style.display = 'block';
+        networkCount.textContent = '0';
+        document.getElementById('networksCard').style.display = 'none';
+        
+        // 重置统计信息
+        document.getElementById('totalNetworks').textContent = '-';
+        document.getElementById('externalNetworks').textContent = '-';
+        document.getElementById('internalNetworks').textContent = '-';
+    }
+
+    // 获取状态徽章样式
+    function getStatusBadgeClass(status) {
+        switch (status?.toUpperCase()) {
+            case 'ACTIVE': return 'bg-success';
+            case 'DOWN': return 'bg-danger';
+            case 'BUILD': return 'bg-warning';
+            case 'ERROR': return 'bg-danger';
+            default: return 'bg-secondary';
+        }
+    }
+
+    // 显示网络详情
+    async function showNetworkDetail(networkId) {
+        try {
+            showLoading(true);
+            const response = await fetch(`/api/networks/${networkId}?cluster_id=${currentClusterId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                const network = data.data;
+                showAlert(`网络详情加载成功: ${network.name}`, 'success');
+                // TODO: 显示详情模态框
+            } else {
+                showAlert('获取网络详情失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading network detail:', error);
+            showAlert('加载网络详情失败', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 编辑网络
+    function editNetwork(networkId) {
+        showAlert('编辑网络功能开发中...', 'info');
+    }
+
+    // 删除网络
+    async function deleteNetwork(networkId, networkName) {
+        if (!confirm(`确定要删除网络 "${networkName}" 吗？`)) {
+            return;
+        }
+        
+        try {
+            showLoading(true);
+            const response = await fetch(`/api/networks/${networkId}/action?cluster_id=${currentClusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'delete'
+                })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                showAlert(result.message, 'success');
+                loadNetworks(); // 重新加载列表
+            } else {
+                showAlert('删除失败: ' + result.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error deleting network:', error);
+            showAlert('删除失败，请检查网络连接', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // HTML转义
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // 工具函数
+    function showLoading(show) {
+        const indicator = document.getElementById('loadingIndicator');
+        if (show) {
+            indicator.style.display = 'block';
+        } else {
+            indicator.style.display = 'none';
+        }
+        isLoading = show;
+    }
+
+    function showAlert(message, type) {
+        // 移除现有的alert
+        const existingAlerts = document.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const content = document.querySelector('main');
+        content.insertBefore(alertDiv, content.firstChild);
+        
+        // 自动删除
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+
+    // 占位函数
+    function showCreateNetworkModal() {
+        showAlert('创建网络功能开发中...', 'info');
+    }
+
+    function refreshNetworks() {
+        if (!currentClusterId) {
+            showAlert('请先选择一个集群', 'warning');
+            return;
+        }
+        loadNetworks();
+    }
+</script>
+{% endblock %}

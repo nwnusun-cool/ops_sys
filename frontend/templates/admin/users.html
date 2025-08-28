@@ -1,0 +1,528 @@
+{% extends "base.html" %}
+
+{% block title %}用户管理 - {{ super() }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* 页面头部 - Material Design 3.0 */
+    .page-header {
+        background: var(--surface);
+        border-radius: var(--radius-lg);
+        padding: 32px;
+        margin-bottom: 32px;
+        box-shadow: var(--elevation-1);
+        border-left: 4px solid var(--primary);
+    }
+    
+    .page-title {
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+        font-weight: 600;
+        font-size: 1.75rem;
+        color: var(--text-primary);
+        margin: 0;
+        display: flex;
+        align-items: center;
+    }
+    
+    .page-title i {
+        color: var(--primary);
+        margin-right: 16px;
+    }
+    
+    /* 用户状态指示器 */
+    .user-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    
+    .user-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--primary-container);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        color: var(--on-primary-container);
+        font-size: 0.875rem;
+    }
+    
+    /* 角色徽章 */
+    .role-badge {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        border-radius: var(--radius-sm);
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+    
+    .role-super-admin {
+        background: var(--error-container);
+        color: var(--on-error-container);
+        border: 1px solid var(--error);
+    }
+    
+    .role-admin {
+        background: var(--warning-container);
+        color: var(--on-warning-container);
+        border: 1px solid var(--warning);
+    }
+    
+    .role-operator {
+        background: var(--info-container);
+        color: var(--on-info-container);
+        border: 1px solid var(--info);
+    }
+    
+    .role-viewer {
+        background: var(--neutral-container);
+        color: var(--on-neutral-container);
+        border: 1px solid var(--neutral);
+    }
+    
+    /* 用户操作按钮 */
+    .action-buttons {
+        display: flex;
+        gap: 4px;
+    }
+    
+    .action-buttons .btn-sm {
+        padding: 6px 10px;
+        font-size: 0.75rem;
+    }
+    
+    /* 加载指示器 */
+    .loading-spinner {
+        display: none;
+        padding: 80px 0;
+    }
+    
+    .loading-spinner .spinner-border {
+        width: 3rem;
+        height: 3rem;
+        border-width: 3px;
+        color: var(--primary);
+    }
+    
+    /* 统计卡片样式 */
+    .stats-overview {
+        margin-bottom: 32px;
+    }
+    
+    /* 用户详情模态框样式 */
+    .modal-header {
+        background: var(--primary);
+        color: var(--on-primary);
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    }
+    
+    .modal-content {
+        border-radius: var(--radius-lg);
+        border: none;
+        box-shadow: var(--elevation-4);
+    }
+    
+    /* 表单样式优化 */
+    .form-floating {
+        margin-bottom: 1rem;
+    }
+    
+    .form-floating .form-control {
+        height: calc(3.5rem + 2px);
+        line-height: 1.25;
+    }
+    
+    .form-floating label {
+        padding: 1rem 0.75rem;
+    }
+    
+    /* 批量操作面板 */
+    .batch-actions-panel {
+        background: var(--primary-container);
+        border: 1px solid var(--primary);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        margin-bottom: 20px;
+        display: none;
+    }
+    
+    .batch-actions-panel.show {
+        display: block;
+        animation: slideDown 0.3s ease-out;
+    }
+    
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center">
+        <h1 class="page-title">
+            <i class="fas fa-users me-3"></i>用户管理
+        </h1>
+        <div class="btn-toolbar">
+            <div class="btn-group me-2">
+                <button type="button" class="btn btn-success" onclick="showCreateModal()">
+                    <i class="fas fa-plus me-2"></i>创建用户
+                </button>
+            </div>
+            <div class="btn-group me-2">
+                <button type="button" class="btn btn-outline-secondary" onclick="exportUsers()">
+                    <i class="fas fa-download me-2"></i>导出
+                </button>
+            </div>
+            <div class="btn-group">
+                <button type="button" class="btn btn-outline-primary" onclick="refreshUsers()">
+                    <i class="fas fa-sync-alt me-2"></i>刷新
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 加载指示器 -->
+<div id="loadingIndicator" class="text-center py-4 loading-spinner">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">加载中...</span>
+    </div>
+    <p class="mt-2 text-muted">正在加载用户信息...</p>
+</div>
+
+<!-- 统计概览 -->
+<div class="stats-overview">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card card-stats primary">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-users fa-2x me-3"></i>
+                        <div>
+                            <h5 class="card-title mb-0">总用户数</h5>
+                            <h2 class="mb-0" id="totalUsers">-</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats success">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-user-check fa-2x me-3"></i>
+                        <div>
+                            <h5 class="card-title mb-0">活跃用户</h5>
+                            <h2 class="mb-0" id="activeUsers">-</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats warning">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-user-slash fa-2x me-3"></i>
+                        <div>
+                            <h5 class="card-title mb-0">禁用用户</h5>
+                            <h2 class="mb-0" id="inactiveUsers">-</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card card-stats danger">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center justify-content-center mb-2">
+                        <i class="fas fa-user-shield fa-2x me-3"></i>
+                        <div>
+                            <h5 class="card-title mb-0">管理员</h5>
+                            <h2 class="mb-0" id="adminUsers">-</h2>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 筛选和搜索 -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form id="filterForm" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">搜索用户</label>
+                <input type="text" class="form-control" id="searchInput" placeholder="用户名或邮箱">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">角色</label>
+                <select class="form-select" id="roleFilter">
+                    <option value="">所有角色</option>
+                    <option value="super_admin">超级管理员</option>
+                    <option value="admin">管理员</option>
+                    <option value="operator">操作员</option>
+                    <option value="viewer">查看者</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">状态</label>
+                <select class="form-select" id="statusFilter">
+                    <option value="">所有状态</option>
+                    <option value="true">启用</option>
+                    <option value="false">禁用</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">每页显示</label>
+                <select class="form-select" id="perPageSelect">
+                    <option value="10">10</option>
+                    <option value="20" selected>20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search me-1"></i>筛选
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="clearFilters()">
+                        <i class="fas fa-times me-1"></i>清空
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 批量操作面板 -->
+<div id="batchActionsPanel" class="batch-actions-panel">
+    <div class="d-flex justify-content-between align-items-center">
+        <span id="selectedCount">已选择: 0</span>
+        <div class="btn-group" role="group">
+            <button type="button" class="btn btn-sm btn-success" onclick="batchAction('enable')">
+                <i class="fas fa-check me-1"></i>启用
+            </button>
+            <button type="button" class="btn btn-sm btn-warning" onclick="batchAction('disable')">
+                <i class="fas fa-pause me-1"></i>禁用
+            </button>
+            <button type="button" class="btn btn-sm btn-danger" onclick="batchAction('delete')">
+                <i class="fas fa-trash me-1"></i>删除
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 用户列表 -->
+<div class="card">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-list me-2"></i>用户列表
+            </h5>
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="selectAll" onclick="toggleSelectAll()">
+                <label class="form-check-label" for="selectAll">全选</label>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th width="50">选择</th>
+                        <th>用户</th>
+                        <th>角色</th>
+                        <th>状态</th>
+                        <th>最后登录</th>
+                        <th>登录次数</th>
+                        <th>创建时间</th>
+                        <th width="200">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="usersTableBody">
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-muted">
+                            <i class="fas fa-inbox fa-2x mb-2 d-block"></i>
+                            正在加载用户数据...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 分页 -->
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="text-muted" id="paginationInfo">
+                显示 0 - 0 条，共 0 条记录
+            </div>
+            <nav>
+                <ul class="pagination mb-0" id="pagination"></ul>
+            </nav>
+        </div>
+    </div>
+</div>
+
+<!-- 创建用户模态框 -->
+<div class="modal fade" id="createUserModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-plus me-2"></i>创建新用户
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createUserForm">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="createUsername" name="username" required>
+                                <label for="createUsername">用户名 *</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="email" class="form-control" id="createEmail" name="email" required>
+                                <label for="createEmail">邮箱 *</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="password" class="form-control" id="createPassword" name="password" required>
+                                <label for="createPassword">密码 *</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <select class="form-select" id="createRole" name="role" required>
+                                    <option value="viewer">查看者</option>
+                                    <option value="operator">操作员</option>
+                                    <option value="admin">管理员</option>
+                                    <option value="super_admin">超级管理员</option>
+                                </select>
+                                <label for="createRole">角色 *</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="createIsActive" name="is_active" checked>
+                                <label class="form-check-label" for="createIsActive">启用账户</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-plus me-2"></i>创建用户
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑用户模态框 -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user-edit me-2"></i>编辑用户
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editUserForm">
+                <input type="hidden" id="editUserId" name="user_id">
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="text" class="form-control" id="editUsername" name="username" required>
+                                <label for="editUsername">用户名 *</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="email" class="form-control" id="editEmail" name="email" required>
+                                <label for="editEmail">邮箱 *</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <input type="password" class="form-control" id="editPassword" name="password" placeholder="留空表示不修改">
+                                <label for="editPassword">新密码（留空不修改）</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-floating">
+                                <select class="form-select" id="editRole" name="role" required>
+                                    <option value="viewer">查看者</option>
+                                    <option value="operator">操作员</option>
+                                    <option value="admin">管理员</option>
+                                    <option value="super_admin">超级管理员</option>
+                                </select>
+                                <label for="editRole">角色 *</label>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="editIsActive" name="is_active">
+                                <label class="form-check-label" for="editIsActive">启用账户</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>保存更改
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 用户详情模态框 -->
+<div class="modal fade" id="userDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-user me-2"></i>用户详情
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="userDetailContent">
+                <!-- 动态加载内容 -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 设置当前用户ID用于权限控制
+    window.currentUserId = {{ current_user.id if current_user.is_authenticated else 0 }};
+</script>
+<script src="{{ url_for('static', filename='js/users.js') }}"></script>
+{% endblock %}

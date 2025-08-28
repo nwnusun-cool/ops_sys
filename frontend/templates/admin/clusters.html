@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}集群管理 - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-server me-2"></i>集群管理
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-primary">
+                <i class="fas fa-plus me-1"></i>添加集群
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        {% if clusters %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>集群名称</th>
+                        <th>认证URL</th>
+                        <th>状态</th>
+                        <th>实例数</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cluster in clusters %}
+                    <tr>
+                        <td>{{ cluster.id }}</td>
+                        <td>
+                            <strong>{{ cluster.name }}</strong>
+                            {% if cluster.description %}
+                            <br><small class="text-muted">{{ cluster.description }}</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ cluster.auth_url }}</td>
+                        <td>
+                            {% if cluster.connection_status == 'connected' %}
+                                <span class="badge bg-success">已连接</span>
+                            {% elif cluster.connection_status == 'failed' %}
+                                <span class="badge bg-danger">连接失败</span>
+                            {% else %}
+                                <span class="badge bg-secondary">未知</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ cluster.instance_count or 0 }}</td>
+                        <td>{{ cluster.created_at.strftime('%Y-%m-%d') if cluster.created_at else '-' }}</td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                <button class="btn btn-outline-info" onclick="testConnection({{ cluster.id }})">
+                                    <i class="fas fa-plug"></i>
+                                </button>
+                                <button class="btn btn-outline-warning">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-outline-danger">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-server fa-3x text-muted mb-3"></i>
+            <h5>暂无OpenStack集群</h5>
+            <p class="text-muted">点击上方"添加集群"按钮来添加第一个集群</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function testConnection(clusterId) {
+    fetch(`/admin/api/clusters/${clusterId}/test`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('连接测试成功！');
+        } else {
+            alert('连接测试失败：' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('测试连接时发生错误');
+    });
+}
+</script>
+{% endblock %}

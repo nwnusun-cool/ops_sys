@@ -1,0 +1,2199 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OpenStack运维管理平台{% endblock %}</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        /* 专业运维平台配色系统 - 稳定、可信赖、科技感 */
+        :root {
+            /* Primary Color Palette - 深蓝科技色 */
+            --primary: #0f172a;          /* 深海军蓝 - 稳重专业 */
+            --primary-variant: #1e293b;  /* 深石墨蓝 */
+            --primary-light: #334155;    /* 中石墨蓝 */
+            --on-primary: #f8fafc;       /* 高对比度文字 */
+            --primary-container: #e2e8f0; /* 浅蓝灰容器 */
+            --on-primary-container: #0f172a;
+            
+            /* Secondary Color Palette - 科技蓝 */
+            --secondary: #0ea5e9;        /* 科技蓝 - 现代感 */
+            --secondary-variant: #0284c7; /* 深科技蓝 */
+            --on-secondary: #ffffff;
+            --secondary-container: #e0f2fe; /* 浅蓝容器 */
+            --on-secondary-container: #0c4a6e;
+            
+            /* Success Color - 专业绿色系 (运行中/正常) */
+            --success: #10b981;          /* 翠绿 - 运行正常 */
+            --success-variant: #059669;  /* 深翠绿 */
+            --on-success: #ffffff;
+            --success-container: #dcfce7; /* 浅绿容器 */
+            --on-success-container: #064e3b;
+            
+            /* Warning Color - 琥珀色系 (警告/即将到期) */
+            --warning: #f59e0b;          /* 琥珀橙 - 需要注意 */
+            --warning-variant: #d97706;  /* 深琥珀 */
+            --on-warning: #ffffff;
+            --warning-container: #fef3c7; /* 浅琥珀容器 */
+            --on-warning-container: #92400e;
+            
+            /* Error Color - 红色系 (停止/错误) */
+            --error: #ef4444;            /* 红色 - 紧急状态 */
+            --error-variant: #dc2626;    /* 深红色 */
+            --on-error: #ffffff;
+            --error-container: #fee2e2;  /* 浅红容器 */
+            --on-error-container: #991b1b;
+            
+            /* Info Color - 蓝色系 (构建中/处理中) */
+            --info: #3b82f6;             /* 蓝色 - 处理中状态 */
+            --info-variant: #2563eb;     /* 深蓝色 */
+            --on-info: #ffffff;
+            --info-container: #dbeafe;   /* 浅蓝容器 */
+            --on-info-container: #1e3a8a;
+            
+            /* Purple Color - 紫色系 (到期/关键提醒) */
+            --purple: #a855f7;           /* 紫色 - 到期提醒 */
+            --purple-variant: #9333ea;   /* 深紫色 */
+            --on-purple: #ffffff;
+            --purple-container: #f3e8ff; /* 浅紫容器 */
+            --on-purple-container: #581c87;
+            
+            /* Neutral Color - 灰色系 (未知/中性) */
+            --neutral: #6b7280;          /* 灰色 - 未知状态 */
+            --neutral-variant: #4b5563;  /* 深灰色 */
+            --on-neutral: #ffffff;
+            --neutral-container: #f3f4f6; /* 浅灰容器 */
+            --on-neutral-container: #374151;
+            
+            /* Neutral Colors - 专业灰色调 */
+            --surface: #f8fafc;          /* 主表面 - 极浅灰蓝 */
+            --surface-variant: #f1f5f9;  /* 变体表面 */
+            --surface-container: #e2e8f0; /* 容器表面 */
+            --surface-container-high: #cbd5e1; /* 高层容器 */
+            --surface-dim: #64748b;      /* 暗淡表面 */
+            --on-surface: #1e293b;       /* 表面文字 */
+            --on-surface-variant: #475569; /* 次要文字 */
+            
+            /* Background Colors */
+            --background: #ffffff;       /* 纯白背景 */
+            --background-variant: #f8fafc; /* 变体背景 */
+            --on-background: #0f172a;    /* 背景文字 */
+            
+            /* Outline Colors */
+            --outline: #cbd5e1;          /* 边框色 */
+            --outline-variant: #e2e8f0;  /* 变体边框 */
+            
+            /* 专业渐变色 - 低调奢华 */
+            --primary-gradient: linear-gradient(135deg, #0f172a 0%, #334155 100%);
+            --secondary-gradient: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+            --success-gradient: linear-gradient(135deg, #059669 0%, #047857 100%);
+            --warning-gradient: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+            --danger-gradient: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+            
+            /* 侧边栏 - 简洁优美风格 */
+            --sidebar-bg: #fafafa;           /* 浅灰白背景 */
+            --sidebar-hover: #f0f4f8;        /* 悬停淡蓝灰 */
+            --sidebar-active: #e3f2fd;       /* 激活浅蓝 */
+            --sidebar-text: #64748b;         /* 中性灰文字 */
+            --sidebar-text-active: #1565c0;  /* 激活深蓝文字 */
+            --sidebar-border: #e2e8f0;       /* 边框色 */
+            --sidebar-icon: #94a3b8;         /* 图标色 */
+            --sidebar-icon-active: #1976d2;  /* 激活图标色 */
+            
+            /* 阴影 - Material Design 标准 */
+            --elevation-1: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 1px 3px 1px rgba(60, 64, 67, 0.15);
+            --elevation-2: 0 1px 2px 0 rgba(60, 64, 67, 0.3), 0 2px 6px 2px rgba(60, 64, 67, 0.15);
+            --elevation-3: 0 4px 8px 3px rgba(60, 64, 67, 0.15), 0 1px 3px 0 rgba(60, 64, 67, 0.3);
+            --elevation-4: 0 6px 10px 4px rgba(60, 64, 67, 0.15), 0 2px 3px 0 rgba(60, 64, 67, 0.3);
+            --elevation-5: 0 8px 12px 6px rgba(60, 64, 67, 0.15), 0 4px 4px 0 rgba(60, 64, 67, 0.3);
+            
+            /* 圆角 - Material Design 标准 */
+            --radius-xs: 4px;
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+            
+            /* 动画 - Google标准缓动 */
+            --transition-standard: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+            --transition-decelerate: all 0.25s cubic-bezier(0, 0, 0.2, 1);
+            --transition-accelerate: all 0.2s cubic-bezier(0.4, 0, 1, 1);
+            
+            /* 文字颜色层级 */
+            --text-primary: #202124;
+            --text-secondary: #5f6368;
+            --text-disabled: #9aa0a6;
+            --text-hint: #bdc1c6;
+        }
+        
+        /* 深色主题 - 专业运维深色模式 */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --surface: #0f172a;
+                --surface-variant: #1e293b;
+                --surface-container: #334155;
+                --surface-container-high: #475569;
+                --surface-dim: #64748b;
+                --on-surface: #f1f5f9;
+                --on-surface-variant: #cbd5e1;
+                --background: #020617;
+                --background-variant: #0f172a;
+                --on-background: #f8fafc;
+                --outline: #475569;
+                --outline-variant: #334155;
+                --sidebar-bg: #1a1a1a;           /* 纯黑背景 */
+                --sidebar-hover: #2d2d2d;         /* 悬停深灰 */
+                --sidebar-active: #263238;        /* 激活蓝灰 */
+                --sidebar-text: #b0bec5;          /* 浅灰文字 */
+                --sidebar-text-active: #81c784;   /* 激活绿色文字 */
+                --sidebar-border: #424242;        /* 边框色 */
+                --sidebar-icon: #90a4ae;          /* 图标色 */
+                --sidebar-icon-active: #66bb6a;   /* 激活图标色 */
+                --text-primary: #f1f5f9;
+                --text-secondary: #cbd5e1;
+                --text-disabled: #64748b;
+                --text-hint: #475569;
+            }
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', sans-serif;
+            background: var(--background-variant);
+            color: var(--on-background);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            font-weight: 400;
+        }
+        
+        /* 顶部导航栏 - 运维平台专业风格 */
+        .navbar {
+            background: var(--primary) !important;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.15);
+            border: none;
+            height: 64px;
+            backdrop-filter: blur(20px);
+        }
+        
+        .navbar-brand {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-weight: 600;
+            font-size: 1.25rem;
+            color: var(--on-primary) !important;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+        }
+        
+        .navbar-brand i {
+            margin-right: 8px;
+            font-size: 1.5rem;
+            color: var(--secondary);
+        }
+        
+        .navbar-brand:hover {
+            color: #e2e8f0 !important;
+        }
+        
+        /* 用户下拉菜单 - 运维平台专业风格 */
+        .navbar-nav .nav-link {
+            color: var(--on-primary) !important;
+            font-weight: 500;
+            border-radius: var(--radius-sm);
+            padding: 10px 16px !important;
+            margin: 0 4px;
+            transition: var(--transition-standard);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .navbar-nav .nav-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.2);
+            color: var(--on-primary) !important;
+            transform: translateY(-1px);
+            box-shadow: var(--elevation-2);
+        }
+        
+        .dropdown-menu {
+            background: var(--surface-container);
+            border: 1px solid var(--outline-variant);
+            box-shadow: var(--elevation-4);
+            border-radius: var(--radius-lg);
+            padding: 8px 0;
+            margin-top: 8px;
+            backdrop-filter: blur(20px);
+        }
+        
+        .dropdown-item {
+            padding: 12px 20px;
+            color: var(--text-primary);
+            font-weight: 400;
+            font-size: 0.875rem;
+            transition: var(--transition-standard);
+            border-radius: 0;
+            margin: 2px 8px;
+            border-radius: var(--radius-sm);
+        }
+        
+        .dropdown-item:hover {
+            background: var(--primary-container);
+            color: var(--on-primary-container);
+            transform: translateX(4px);
+        }
+        
+        .dropdown-item i {
+            width: 18px;
+            opacity: 0.7;
+        }
+        
+        .dropdown-divider {
+            border-color: var(--outline-variant);
+            margin: 8px 0;
+        }
+        
+        /* 侧边栏 - 简洁优美风格 */
+        .sidebar {
+            position: fixed;
+            top: 64px;
+            bottom: 0;
+            left: 0;
+            z-index: 100;
+            padding: 16px 0;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--sidebar-border);
+            width: 280px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            /* 简洁的阴影 */
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.08);
+            /* 平滑滚动 */
+            scroll-behavior: smooth;
+            transition: all var(--transition-standard);
+        }
+        
+        /* 简洁的顶部装饰线 */
+        .sidebar::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+        }
+        
+        /* 导航链接样式 - 简洁优美风格 */
+        .nav-link {
+            color: var(--sidebar-text) !important;
+            border-radius: var(--radius-md);
+            margin: 2px 16px;
+            padding: 12px 16px !important;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            font-weight: 500;
+            font-size: 0.875rem;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            display: flex;
+            align-items: center;
+            text-decoration: none;
+            background: transparent;
+            /* 轻微的内阴影增加层次感 */
+            box-shadow: inset 0 0 0 0 var(--sidebar-active);
+        }
+        
+        .nav-link:hover {
+            color: var(--sidebar-text-active) !important;
+            background: var(--sidebar-hover);
+            transform: translateX(2px);
+            /* 平滑的内阴影动画 */
+            box-shadow: inset 3px 0 0 0 var(--sidebar-icon-active);
+        }
+        
+        .nav-link.active {
+            background: var(--sidebar-active) !important;
+            color: var(--sidebar-text-active) !important;
+            transform: translateX(2px);
+            box-shadow: inset 3px 0 0 0 var(--sidebar-icon-active), 
+                        0 2px 8px rgba(0, 0, 0, 0.1);
+            font-weight: 600;
+        }
+        
+        .nav-link i {
+            width: 18px;
+            height: 18px;
+            margin-right: 12px;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--sidebar-icon);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .nav-link:hover i {
+            color: var(--sidebar-icon-active);
+            transform: scale(1.1);
+        }
+        
+        .nav-link.active i {
+            color: var(--sidebar-icon-active);
+            transform: scale(1.05);
+        }
+        
+        /* 主内容区域 - 运维平台专业风格 */
+        main {
+            margin-left: 280px !important;
+            padding: 32px 40px;
+            min-height: 100vh;
+            background: var(--surface-variant);
+            /* 添加微妙的网格背景纹理 */
+            background-image: 
+                radial-gradient(circle at 1px 1px, rgba(15, 23, 42, 0.05) 1px, transparent 0);
+            background-size: 20px 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+                transition: var(--transition-standard);
+            }
+            .sidebar.show {
+                transform: translateX(0);
+            }
+            main {
+                margin-left: 0 !important;
+                padding: 16px 20px;
+            }
+        }
+        
+        /* 卡片样式 - 运维平台专业风格 */
+        .card {
+            border: 1px solid var(--outline-variant);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--elevation-1);
+            transition: var(--transition-decelerate);
+            overflow: hidden;
+            background: var(--surface);
+            /* 添加微妙的顶部装饰线 */
+            border-top: 3px solid var(--primary);
+        }
+        
+        .card:hover {
+            box-shadow: var(--elevation-3);
+            border-color: var(--outline);
+            transform: translateY(-2px);
+        }
+        
+        .card-header {
+            background: linear-gradient(135deg, var(--surface) 0%, var(--surface-container) 100%);
+            border-bottom: 1px solid var(--outline-variant);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            font-weight: 600;
+            font-size: 1rem;
+            color: var(--text-primary);
+            padding: 20px 28px;
+            position: relative;
+        }
+        
+        .card-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 28px;
+            right: 28px;
+            height: 2px;
+            background: linear-gradient(90deg, var(--secondary) 0%, transparent 100%);
+            opacity: 0.3;
+        }
+        
+        .card-body {
+            padding: 28px;
+            color: var(--text-primary);
+            background: var(--surface);
+        }
+        
+        /* 统计卡片 - 运维平台专业风格 */
+        .card-stats {
+            border: 1px solid var(--outline-variant);
+            position: relative;
+            overflow: hidden;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--elevation-2);
+            transition: var(--transition-decelerate);
+            background: var(--surface);
+        }
+        
+        .card-stats:hover {
+            box-shadow: var(--elevation-4);
+            transform: translateY(-3px);
+            border-color: var(--outline);
+        }
+        
+        .card-stats.primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-variant) 100%);
+            color: var(--on-primary);
+            border-color: var(--primary);
+        }
+        
+        .card-stats.success {
+            background: linear-gradient(135deg, var(--success) 0%, var(--success-variant) 100%);
+            color: var(--on-success);
+            border-color: var(--success);
+        }
+        
+        .card-stats.warning {
+            background: linear-gradient(135deg, var(--warning) 0%, var(--warning-variant) 100%);
+            color: var(--on-warning);
+            border-color: var(--warning);
+        }
+        
+        .card-stats.danger {
+            background: linear-gradient(135deg, var(--error) 0%, var(--error-variant) 100%);
+            color: var(--on-error);
+            border-color: var(--error);
+        }
+        
+        /* 添加装饰性几何图案 */
+        .card-stats::before {
+            content: '';
+            position: absolute;
+            top: -20px;
+            right: -20px;
+            width: 80px;
+            height: 80px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            transition: var(--transition-standard);
+        }
+        
+        .card-stats:hover::before {
+            transform: scale(1.2);
+            opacity: 0.2;
+        }
+        
+        .card-stats .card-body {
+            position: relative;
+            z-index: 1;
+            padding: 28px;
+        }
+        
+        .card-stats .card-title {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            font-weight: 500;
+            font-size: 0.875rem;
+            opacity: 0.9;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        
+        .card-stats h2 {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            font-weight: 700;
+            font-size: 2.5rem;
+            line-height: 1;
+            margin: 0;
+        }
+        
+        /* 按钮 - 运维平台专业风格 */
+        .btn {
+            border-radius: var(--radius-sm);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            font-weight: 500;
+            font-size: 0.875rem;
+            padding: 12px 24px;
+            transition: var(--transition-standard);
+            border: 1px solid transparent;
+            position: relative;
+            text-transform: none;
+            letter-spacing: 0.25px;
+            overflow: hidden;
+        }
+        
+        /* 添加按钮光泽效果 */
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: var(--transition-standard);
+        }
+        
+        .btn:hover::before {
+            left: 100%;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-variant) 100%);
+            color: var(--on-primary);
+            box-shadow: var(--elevation-1);
+            border-color: var(--primary);
+        }
+        
+        .btn-primary:hover {
+            background: linear-gradient(135deg, var(--primary-variant) 0%, var(--primary) 100%);
+            color: var(--on-primary);
+            box-shadow: var(--elevation-3);
+            transform: translateY(-1px);
+        }
+        
+        .btn-success {
+            background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-variant) 100%);
+            color: var(--on-secondary);
+            box-shadow: var(--elevation-1);
+            border-color: var(--secondary);
+        }
+        
+        .btn-success:hover {
+            background: linear-gradient(135deg, var(--secondary-variant) 0%, var(--secondary) 100%);
+            color: var(--on-secondary);
+            box-shadow: var(--elevation-3);
+            transform: translateY(-1px);
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, var(--warning) 0%, var(--warning-variant) 100%);
+            color: var(--on-warning);
+            box-shadow: var(--elevation-1);
+            border-color: var(--warning);
+        }
+        
+        .btn-warning:hover {
+            background: linear-gradient(135deg, var(--warning-variant) 0%, var(--warning) 100%);
+            color: var(--on-warning);
+            box-shadow: var(--elevation-3);
+            transform: translateY(-1px);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, var(--error) 0%, var(--error-variant) 100%);
+            color: var(--on-error);
+            box-shadow: var(--elevation-1);
+            border-color: var(--error);
+        }
+        
+        .btn-danger:hover {
+            background: linear-gradient(135deg, var(--error-variant) 0%, var(--error) 100%);
+            color: var(--on-error);
+            box-shadow: var(--elevation-3);
+            transform: translateY(-1px);
+        }
+        
+        /* 轮廓按钮 - 运维平台专业风格 */
+        .btn-outline-primary {
+            background: rgba(15, 23, 42, 0.05);
+            color: var(--primary);
+            border: 2px solid var(--primary);
+            backdrop-filter: blur(10px);
+        }
+        
+        .btn-outline-primary:hover {
+            background: var(--primary);
+            color: var(--on-primary);
+            border-color: var(--primary);
+            box-shadow: var(--elevation-2);
+            transform: translateY(-1px);
+        }
+        
+        .btn-outline-secondary {
+            background: rgba(148, 163, 184, 0.05);
+            color: var(--text-secondary);
+            border: 2px solid var(--outline);
+            backdrop-filter: blur(10px);
+        }
+        
+        .btn-outline-secondary:hover {
+            background: var(--surface-container);
+            color: var(--text-primary);
+            border-color: var(--primary);
+            box-shadow: var(--elevation-1);
+            transform: translateY(-1px);
+        }
+        
+        .btn-outline-info {
+            background: rgba(14, 165, 233, 0.05);
+            color: var(--secondary);
+            border: 2px solid var(--secondary);
+            backdrop-filter: blur(10px);
+        }
+        
+        .btn-outline-info:hover {
+            background: var(--secondary);
+            color: var(--on-secondary);
+            border-color: var(--secondary);
+            box-shadow: var(--elevation-2);
+            transform: translateY(-1px);
+        }
+        
+        .btn-outline-danger {
+            background: rgba(220, 38, 38, 0.05);
+            color: var(--error);
+            border: 2px solid var(--error);
+            backdrop-filter: blur(10px);
+        }
+        
+        .btn-outline-danger:hover {
+            background: var(--error);
+            color: var(--on-error);
+            border-color: var(--error);
+            box-shadow: var(--elevation-2);
+            transform: translateY(-1px);
+        }
+        
+        /* 表格 - 运维平台专业风格 */
+        .table {
+            background: var(--surface);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: var(--elevation-2);
+            border: 1px solid var(--outline-variant);
+        }
+        
+        .table thead th {
+            background: linear-gradient(135deg, var(--surface-container) 0%, var(--surface-container-high) 100%);
+            color: var(--text-primary);
+            border: none;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            font-weight: 600;
+            font-size: 0.875rem;
+            padding: 20px 24px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            position: relative;
+        }
+        
+        .table thead th::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--secondary);
+            opacity: 0.6;
+        }
+        
+        .table tbody tr {
+            transition: var(--transition-standard);
+            border-bottom: 1px solid var(--outline-variant);
+        }
+        
+        .table tbody tr:hover {
+            background: var(--primary-container);
+            transform: translateX(4px);
+            box-shadow: inset 4px 0 0 var(--secondary);
+        }
+        
+        /* 表格行状态样式 - 运维平台专业指示 */
+        .table tbody tr.status-active,
+        .table tbody tr.status-running {
+            border-left: 4px solid var(--success);
+            background: linear-gradient(90deg, var(--success-container) 0%, var(--surface) 15%);
+        }
+        
+        .table tbody tr.status-stopped,
+        .table tbody tr.status-paused {
+            border-left: 4px solid var(--warning);
+            background: linear-gradient(90deg, var(--warning-container) 0%, var(--surface) 15%);
+        }
+        
+        .table tbody tr.status-error,
+        .table tbody tr.status-failed {
+            border-left: 4px solid var(--error);
+            background: linear-gradient(90deg, var(--error-container) 0%, var(--surface) 15%);
+        }
+        
+        .table tbody tr.status-building,
+        .table tbody tr.status-pending {
+            border-left: 4px solid var(--info);
+            background: linear-gradient(90deg, var(--info-container) 0%, var(--surface) 15%);
+        }
+        
+        .table tbody tr.status-expired,
+        .table tbody tr.status-critical {
+            border-left: 4px solid var(--purple);
+            background: linear-gradient(90deg, var(--purple-container) 0%, var(--surface) 15%);
+        }
+        
+        .table tbody tr.status-unknown,
+        .table tbody tr.status-inactive {
+            border-left: 4px solid var(--neutral);
+            background: linear-gradient(90deg, var(--neutral-container) 0%, var(--surface) 15%);
+        }
+        
+        /* 状态行hover效果优化 */
+        .table tbody tr.status-active:hover { box-shadow: inset 6px 0 0 var(--success), var(--elevation-1); }
+        .table tbody tr.status-stopped:hover { box-shadow: inset 6px 0 0 var(--warning), var(--elevation-1); }
+        .table tbody tr.status-error:hover { box-shadow: inset 6px 0 0 var(--error), var(--elevation-1); }
+        .table tbody tr.status-building:hover { box-shadow: inset 6px 0 0 var(--info), var(--elevation-1); }
+        .table tbody tr.status-expired:hover { box-shadow: inset 6px 0 0 var(--purple), var(--elevation-1); }
+        .table tbody tr.status-unknown:hover { box-shadow: inset 6px 0 0 var(--neutral), var(--elevation-1); }
+        
+        .table tbody td {
+            padding: 18px 24px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            vertical-align: middle;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+        }
+        
+        /* 表单控件 - 运维平台专业风格 */
+        .form-control, .form-select {
+            border-radius: var(--radius-sm);
+            border: 2px solid var(--outline);
+            padding: 14px 16px;
+            transition: var(--transition-standard);
+            background: var(--surface);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+            font-size: 0.875rem;
+            font-weight: 400;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 4px rgba(14, 165, 233, 0.15);
+            background: var(--surface);
+            outline: none;
+            transform: translateY(-1px);
+        }
+        
+        .form-label {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            margin-bottom: 8px;
+            letter-spacing: 0.25px;
+        }
+        
+        /* 徽章 - 运维平台专业风格 */
+        .badge {
+            border-radius: var(--radius-sm);
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+            font-weight: 600;
+            font-size: 0.75rem;
+            padding: 6px 12px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            border: 1px solid transparent;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* 徽章发光效果 */
+        .badge::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: var(--transition-standard);
+        }
+        
+        .badge:hover::before {
+            left: 100%;
+        }
+        
+        /* 专业状态背景色系统 - 运维平台 */
+        .bg-primary {
+            background: var(--primary) !important;
+            color: var(--on-primary) !important;
+            border: 1px solid var(--primary) !important;
+        }
+        
+        .bg-secondary {
+            background: var(--secondary) !important;
+            color: var(--on-secondary) !important;
+            border: 1px solid var(--secondary) !important;
+        }
+        
+        /* 成功/运行中状态 - 绿色系 */
+        .bg-success {
+            background: var(--success) !important;
+            color: var(--on-success) !important;
+            border: 1px solid var(--success) !important;
+        }
+        
+        /* 警告/即将到期状态 - 琥珀色系 */
+        .bg-warning {
+            background: var(--warning) !important;
+            color: var(--on-warning) !important;
+            border: 1px solid var(--warning) !important;
+        }
+        
+        /* 错误/停止状态 - 红色系 */
+        .bg-danger {
+            background: var(--error) !important;
+            color: var(--on-error) !important;
+            border: 1px solid var(--error) !important;
+        }
+        
+        /* 信息/构建中状态 - 蓝色系 */
+        .bg-info {
+            background: var(--info) !important;
+            color: var(--on-info) !important;
+            border: 1px solid var(--info) !important;
+        }
+        
+        /* 到期/关键提醒状态 - 紫色系 */
+        .bg-purple {
+            background: var(--purple) !important;
+            color: var(--on-purple) !important;
+            border: 1px solid var(--purple) !important;
+        }
+        
+        /* 未知/中性状态 - 灰色系 */
+        .bg-neutral {
+            background: var(--neutral) !important;
+            color: var(--on-neutral) !important;
+            border: 1px solid var(--neutral) !important;
+        }
+        
+        /* 浅色容器背景 - 用于表格行状态提示 */
+        .bg-success-light {
+            background: var(--success-container) !important;
+            color: var(--on-success-container) !important;
+            border-left: 4px solid var(--success) !important;
+        }
+        
+        .bg-warning-light {
+            background: var(--warning-container) !important;
+            color: var(--on-warning-container) !important;
+            border-left: 4px solid var(--warning) !important;
+        }
+        
+        .bg-danger-light {
+            background: var(--error-container) !important;
+            color: var(--on-error-container) !important;
+            border-left: 4px solid var(--error) !important;
+        }
+        
+        .bg-info-light {
+            background: var(--info-container) !important;
+            color: var(--on-info-container) !important;
+            border-left: 4px solid var(--info) !important;
+        }
+        
+        .bg-purple-light {
+            background: var(--purple-container) !important;
+            color: var(--on-purple-container) !important;
+            border-left: 4px solid var(--purple) !important;
+        }
+        
+        .bg-neutral-light {
+            background: var(--neutral-container) !important;
+            color: var(--on-neutral-container) !important;
+            border-left: 4px solid var(--neutral) !important;
+        }
+        
+        /* 警告框 - Material Design 3.0 */
+        .alert {
+            border: none;
+            border-radius: var(--radius-md);
+            margin-bottom: 20px;
+            font-family: 'Roboto', sans-serif;
+            font-size: 0.875rem;
+        }
+        
+        .alert-success {
+            background: var(--secondary-container);
+            color: var(--on-secondary-container);
+            border-left: 4px solid var(--secondary);
+        }
+        
+        .alert-danger {
+            background: var(--error-container);
+            color: var(--on-error-container);
+            border-left: 4px solid var(--error);
+        }
+        
+        .alert-warning {
+            background: var(--warning-container);
+            color: var(--on-warning-container);
+            border-left: 4px solid var(--warning);
+        }
+        
+        .alert-info {
+            background: var(--primary-container);
+            color: var(--on-primary-container);
+            border-left: 4px solid var(--primary);
+        }
+        
+        /* 加载动画 */
+        .spinner-border {
+            color: var(--primary);
+        }
+        
+        /* 滚动条 - Material Design 3.0 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--surface-variant);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--outline);
+            border-radius: var(--radius-sm);
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--outline-variant);
+        }
+        
+        /* 状态指示器系统 - 运维平台专业视觉 */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        /* 状态圆点指示器 */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 6px;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+        }
+        
+        .status-dot.success { background: var(--success); animation: pulse-success 2s infinite; }
+        .status-dot.warning { background: var(--warning); animation: pulse-warning 2s infinite; }
+        .status-dot.error { background: var(--error); animation: pulse-error 2s infinite; }
+        .status-dot.info { background: var(--info); animation: pulse-info 2s infinite; }
+        .status-dot.purple { background: var(--purple); animation: pulse-purple 2s infinite; }
+        .status-dot.neutral { background: var(--neutral); }
+        
+        /* 状态脉动动画 */
+        @keyframes pulse-success {
+            0%, 100% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 0 4px rgba(16, 185, 129, 0.3); }
+            50% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 0 8px rgba(16, 185, 129, 0.1); }
+        }
+        
+        @keyframes pulse-warning {
+            0%, 100% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 0 4px rgba(245, 158, 11, 0.3); }
+            50% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 0 8px rgba(245, 158, 11, 0.1); }
+        }
+        
+        @keyframes pulse-error {
+            0%, 100% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 0 4px rgba(239, 68, 68, 0.3); }
+            50% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 0 8px rgba(239, 68, 68, 0.1); }
+        }
+        
+        @keyframes pulse-info {
+            0%, 100% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 0 4px rgba(59, 130, 246, 0.3); }
+            50% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 0 8px rgba(59, 130, 246, 0.1); }
+        }
+        
+        @keyframes pulse-purple {
+            0%, 100% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 0 4px rgba(168, 85, 247, 0.3); }
+            50% { box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8), 0 0 0 8px rgba(168, 85, 247, 0.1); }
+        }
+        
+        /* 状态图标颜色类 */
+        .text-success { color: var(--success) !important; }
+        .text-warning { color: var(--warning) !important; }
+        .text-danger { color: var(--error) !important; }
+        .text-info { color: var(--info) !important; }
+        .text-purple { color: var(--purple) !important; }
+        .text-neutral { color: var(--neutral) !important; }
+        
+        /*
+        ========================================
+        状态样式使用指南 - 运维平台专业规范
+        ========================================
+        
+        1. 表格行状态类使用：
+        <tr class="status-active">     - 运行中/正常 (绿色指示)
+        <tr class="status-stopped">    - 停止/暂停 (黄色指示) 
+        <tr class="status-error">      - 错误/失败 (红色指示)
+        <tr class="status-building">   - 构建中/处理中 (蓝色指示)
+        <tr class="status-expired">    - 到期/关键 (紫色指示)
+        <tr class="status-unknown">    - 未知/中性 (灰色指示)
+        
+        2. 徽章状态类使用：
+        <span class="badge bg-success">ACTIVE</span>     - 绿色成功状态
+        <span class="badge bg-warning">WARNING</span>    - 黄色警告状态
+        <span class="badge bg-danger">ERROR</span>       - 红色错误状态
+        <span class="badge bg-info">BUILDING</span>      - 蓝色信息状态
+        <span class="badge bg-purple">EXPIRED</span>     - 紫色到期状态
+        <span class="badge bg-neutral">UNKNOWN</span>    - 灰色中性状态
+        
+        3. 状态指示器使用：
+        <span class="status-dot success"></span>Active   - 带脉动动画的绿色圆点
+        <span class="status-dot warning"></span>Warning  - 带脉动动画的黄色圆点
+        <span class="status-dot error"></span>Error      - 带脉动动画的红色圆点
+        
+        4. JavaScript状态类动态分配示例：
+        function getStatusClass(status) {
+            const statusMap = {
+                'ACTIVE': 'status-active',
+                'RUNNING': 'status-active', 
+                'STOPPED': 'status-stopped',
+                'PAUSED': 'status-stopped',
+                'ERROR': 'status-error',
+                'FAILED': 'status-error',
+                'BUILDING': 'status-building',
+                'PENDING': 'status-building',
+                'EXPIRED': 'status-expired',
+                'CRITICAL': 'status-expired'
+            };
+            return statusMap[status.toUpperCase()] || 'status-unknown';
+        }
+        
+        function getBadgeClass(status) {
+            const badgeMap = {
+                'ACTIVE': 'bg-success',
+                'RUNNING': 'bg-success',
+                'STOPPED': 'bg-warning', 
+                'PAUSED': 'bg-warning',
+                'ERROR': 'bg-danger',
+                'FAILED': 'bg-danger',
+                'BUILDING': 'bg-info',
+                'PENDING': 'bg-info',
+                'EXPIRED': 'bg-purple',
+                'CRITICAL': 'bg-purple'
+            };
+            return badgeMap[status.toUpperCase()] || 'bg-neutral';
+        }
+        ========================================
+        */
+        
+        /* Bootstrap模态框z-index修复 - 确保所有模态框显示在最顶层 */
+        .modal {
+            z-index: 1060 !important;
+        }
+        
+        .modal-backdrop {
+            z-index: 1055 !important;
+        }
+        
+        /* 下拉菜单的z-index确保不会遮挡模态框 */
+        .dropdown-menu {
+            z-index: 1000 !important;
+        }
+        
+        /* 修复页面中下拉菜单被遮盖的问题 */
+        .dropdown {
+            position: relative !important;
+            z-index: 1020 !important;
+        }
+        
+        .dropdown.show {
+            z-index: 1050 !important;
+        }
+        
+        .dropdown-menu.show {
+            z-index: 1051 !important;
+        }
+        
+        /* 特别处理卡片中的下拉菜单 */
+        .card .dropdown-menu {
+            z-index: 1050 !important;
+            position: absolute !important;
+            will-change: transform !important;
+        }
+        
+        .card {
+            overflow: visible !important;
+        }
+        
+        .card-header,
+        .card-body {
+            overflow: visible !important;
+        }
+        
+        /* 特别处理表格中的下拉菜单 */
+        .table .dropdown-menu {
+            z-index: 1050 !important;
+        }
+        
+        .table-responsive {
+            overflow-x: auto !important;
+            overflow-y: visible !important;
+        }
+        
+        /* 确保表格行和单元格不会遮盖下拉菜单 */
+        .table tr,
+        .table td,
+        .table th {
+            overflow: visible !important;
+        }
+        
+        /* 处理最后一行的下拉菜单可能向上展开 */
+        .table tbody tr:last-child .dropdown-menu {
+            top: auto !important;
+            bottom: 100% !important;
+        }
+        
+        /* 实例操作按钮特殊处理 */
+        .instance-actions,
+        .volume-actions {
+            position: relative !important;
+            z-index: 1021 !important;
+        }
+        
+        .instance-actions .dropdown,
+        .volume-actions .dropdown {
+            z-index: 1022 !important;
+        }
+        
+        .instance-actions .dropdown-menu,
+        .volume-actions .dropdown-menu {
+            z-index: 1023 !important;
+            position: absolute !important;
+            transform: none !important;
+        }
+        
+        /* 确保包含下拉菜单的容器都不会隐藏菜单 */
+        .row,
+        .col,
+        .col-md-6,
+        .col-lg-4,
+        .col-md-3,
+        .container-fluid,
+        .mb-4 {
+            overflow: visible !important;
+        }
+        
+        /* 特殊处理可能产生滚动的容器 */
+        #instancesContainer,
+        #volumesContainer {
+            overflow: visible !important;
+        }
+        
+        /* 修复Bootstrap卡片组的overflow问题 */
+        .card-group,
+        .card-deck {
+            overflow: visible !important;
+        }
+        
+        /* 处理可能的父级容器overflow问题 */
+        main {
+            overflow-x: visible !important;
+        }
+        
+        /* 强制所有下拉菜单显示在最上层 */
+        [data-bs-toggle="dropdown"] + .dropdown-menu {
+            z-index: 1052 !important;
+        }
+        
+        /* 针对实例和卷管理页面的特殊修复 */
+        .instance-card,
+        .volume-card {
+            position: relative !important;
+            overflow: visible !important;
+        }
+        
+        .instance-card .dropdown-menu,
+        .volume-card .dropdown-menu {
+            z-index: 1053 !important;
+            min-width: 200px !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+        }
+        
+        /* 临时菜单（移动到body的菜单）的特殊样式 */
+        .dropdown-menu[style*="position: fixed"] {
+            z-index: 999999 !important;
+            background: var(--surface) !important;
+            border: 1px solid var(--outline-variant) !important;
+            border-radius: var(--radius-md) !important;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2) !important;
+            min-width: 200px !important;
+            max-width: 300px !important;
+            backdrop-filter: blur(10px) !important;
+            animation: dropdownFadeIn 0.15s ease-out !important;
+            position: fixed !important;
+            display: block !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
+        }
+        
+        /* 临时菜单的淡入动画 */
+        @keyframes dropdownFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-5px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        /* 确保临时菜单的链接样式正确 */
+        .dropdown-menu[style*="position: fixed"] .dropdown-item {
+            color: var(--text-primary) !important;
+            background: transparent !important;
+            padding: 8px 16px !important;
+            transition: all 0.2s ease !important;
+        }
+        
+        .dropdown-menu[style*="position: fixed"] .dropdown-item:hover {
+            background: var(--primary-container) !important;
+            color: var(--on-primary-container) !important;
+        }
+        
+        .dropdown-menu[style*="position: fixed"] .dropdown-divider {
+            border-top: 1px solid var(--outline-variant) !important;
+            margin: 4px 0 !important;
+        }
+        
+        /* 导航栏和工具栏确保不会遮挡模态框 */
+        .navbar {
+            z-index: 1040 !important;
+        }
+        
+        .btn-toolbar {
+            z-index: 1030 !important;
+        }
+        
+        /* 确保模态框内的元素可以正常交互 */
+        .modal-dialog {
+            z-index: 1061 !important;
+        }
+        
+        .modal-content {
+            z-index: 1062 !important;
+        }
+        
+        /* 确保模态框头部、主体和底部都正确显示 */
+        .modal-header,
+        .modal-body,
+        .modal-footer {
+            z-index: 1063 !important;
+        }
+        
+        /* 修复可能的dropdown按钮在模态框中的显示问题 */
+        .modal .dropdown-menu {
+            z-index: 1070 !important;
+        }
+        
+        /* 确保模态框中的所有按钮和表单元素都能正常交互 */
+        .modal button,
+        .modal input,
+        .modal select,
+        .modal textarea {
+            z-index: auto;
+            position: relative;
+        }
+        
+        /* 防止其他浮动元素遮挡模态框 */
+        .alert {
+            z-index: 1050 !important;
+        }
+        
+        /* 特殊处理可能的position: fixed元素 */
+        .fixed-top,
+        .fixed-bottom,
+        .sticky-top {
+            z-index: 1040 !important;
+        }
+        
+        /* 模态框显示修复 - 确保模态框完全可见且可交互 */
+        .modal.show {
+            display: block !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+        
+        .modal.show .modal-dialog {
+            opacity: 1 !important;
+            transform: none !important;
+        }
+        
+        /* 确保模态框背景遮罩正确工作 */
+        .modal-backdrop.show {
+            opacity: 0.5 !important;
+        }
+        
+        /* 防止页面滚动干扰模态框显示 */
+        body.modal-open {
+            overflow: hidden !important;
+            padding-right: 0 !important;
+        }
+        
+        /* 修复可能的overflow问题 */
+        .modal-dialog {
+            margin: 1rem auto !important;
+            max-width: none !important;
+            width: auto !important;
+            pointer-events: auto !important;
+            max-height: calc(100vh - 2rem) !important;
+            display: flex !important;
+            align-items: center !important;
+        }
+        
+        /* 确保模态框内容可以滚动 */
+        .modal-content {
+            max-height: calc(100vh - 2rem) !important;
+            overflow: hidden !important;
+            display: flex !important;
+            flex-direction: column !important;
+        }
+        
+        /* 模态框主体可滚动 */
+        .modal-body {
+            overflow-y: auto !important;
+            overflow-x: hidden !important;
+            max-height: calc(100vh - 200px) !important;
+            flex: 1 1 auto !important;
+        }
+        
+        /* 模态框头部和底部固定 */
+        .modal-header,
+        .modal-footer {
+            flex: 0 0 auto !important;
+        }
+        
+        /* 确保大尺寸模态框正确显示 */
+        .modal-xl {
+            max-width: 90vw !important;
+            width: 90vw !important;
+        }
+        
+        .modal-lg {
+            max-width: 80vw !important;
+            width: 80vw !important;
+        }
+        
+        .modal-md {
+            max-width: 60vw !important;
+            width: 60vw !important;
+        }
+        
+        /* 小屏幕设备上的响应式调整 */
+        @media (max-width: 768px) {
+            .modal-dialog {
+                margin: 0.5rem !important;
+                max-height: calc(100vh - 1rem) !important;
+                width: calc(100vw - 1rem) !important;
+            }
+            
+            .modal-content {
+                max-height: calc(100vh - 1rem) !important;
+            }
+            
+            .modal-body {
+                max-height: calc(100vh - 150px) !important;
+            }
+            
+            .modal-xl,
+            .modal-lg,
+            .modal-md {
+                width: calc(100vw - 1rem) !important;
+                max-width: calc(100vw - 1rem) !important;
+            }
+        }
+        
+        /* 修复下拉菜单在模态框中的显示问题 */
+        .modal .dropdown-menu {
+            position: absolute !important;
+            transform: none !important;
+            max-height: 200px !important;
+            overflow-y: auto !important;
+        }
+        
+        /* 确保表格在模态框中正确显示 */
+        .modal .table-responsive {
+            max-height: 400px !important;
+            overflow-y: auto !important;
+        }
+        
+        /* 模态框中的表单元素优化 */
+        .modal .form-control,
+        .modal .form-select {
+            width: 100% !important;
+        }
+        
+        /* 模态框中的长内容处理 */
+        .modal-body {
+            word-wrap: break-word !important;
+            word-break: break-word !important;
+        }
+        
+        /* 模态框滚动条美化 */
+        .modal-body::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        .modal-body::-webkit-scrollbar-track {
+            background: var(--surface-variant);
+            border-radius: 4px;
+        }
+        
+        .modal-body::-webkit-scrollbar-thumb {
+            background: var(--outline);
+            border-radius: 4px;
+        }
+        
+        .modal-body::-webkit-scrollbar-thumb:hover {
+            background: var(--outline-variant);
+        }
+        
+        /* 模态框中的代码块优化 */
+        .modal pre {
+            white-space: pre-wrap !important;
+            word-wrap: break-word !important;
+            font-size: 0.85rem !important;
+            line-height: 1.4 !important;
+        }
+        
+        /* 模态框中的列表优化 */
+        .modal .dropdown-menu {
+            max-height: 250px !important;
+            overflow-y: auto !important;
+        }
+        
+        .modal .list-group {
+            max-height: 400px !important;
+            overflow-y: auto !important;
+        }
+        
+        /* 确保模态框中的按钮组正确显示 */
+        .modal .btn-group {
+            flex-wrap: wrap !important;
+        }
+        
+        .modal .btn-group .btn {
+            margin: 2px !important;
+        }
+        
+        /* 模态框中的警告框优化 */
+        .modal .alert {
+            margin-bottom: 1rem !important;
+        }
+        
+        /* 模态框中的卡片优化 */
+        .modal .card {
+            margin-bottom: 1rem !important;
+        }
+        
+        /* 特殊处理：确保实例详情等复杂内容正确显示 */
+        .modal .row {
+            margin: 0 !important;
+        }
+        
+        .modal .col-md-6 {
+            padding: 0.5rem !important;
+        }
+        
+        /* 模态框中的表格头部固定（如果需要） */
+        .modal .table-responsive {
+            position: relative !important;
+        }
+        
+        .modal .table-responsive thead th {
+            position: sticky !important;
+            top: 0 !important;
+            background: var(--surface) !important;
+            z-index: 10 !important;
+            border-bottom: 2px solid var(--outline-variant) !important;
+        }
+        
+        /* 防止模态框被其他元素遮挡的最后手段 */
+        .modal {
+            pointer-events: auto !important;
+        }
+        
+        .modal-dialog * {
+            pointer-events: auto !important;
+        }
+        
+        /* 网络下拉菜单 - 简洁优美风格 */
+        .dropdown-hover {
+            position: relative;
+        }
+        
+        .dropdown-arrow {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            opacity: 0.7;
+            font-size: 0.75rem;
+            color: var(--sidebar-icon);
+        }
+        
+        .dropdown-hover:hover .dropdown-arrow {
+            transform: rotate(180deg);
+            opacity: 1;
+            color: var(--sidebar-icon-active);
+        }
+        
+        /* 下拉菜单容器 - 简洁优美风格 */
+        .dropdown-menu-custom {
+            display: none;
+            opacity: 0;
+            max-height: 0;
+            overflow: hidden;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            background: transparent;
+            border-radius: var(--radius-sm);
+            margin: 4px 0;
+            padding: 4px 0;
+        }
+        
+        .dropdown-hover:hover .dropdown-menu-custom {
+            display: block;
+            opacity: 1;
+            max-height: 300px;
+        }
+        
+        /* 子菜单项样式 - 简洁优美风格 */
+        .dropdown-menu-custom .nav-link {
+            font-size: 0.8rem;
+            padding: 8px 16px 8px 40px !important;
+            margin: 1px 8px 1px 24px;
+            border-radius: var(--radius-sm);
+            color: var(--sidebar-text) !important;
+            position: relative;
+            font-weight: 400;
+            transition: all 0.15s ease-out;
+        }
+        
+        .dropdown-menu-custom .nav-link::before {
+            content: '';
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 3px;
+            background: var(--sidebar-icon);
+            border-radius: 50%;
+            transition: all 0.15s ease-out;
+        }
+        
+        .dropdown-menu-custom .nav-link:hover {
+            background: var(--sidebar-hover);
+            color: var(--sidebar-text-active) !important;
+            transform: translateX(2px);
+        }
+        
+        .dropdown-menu-custom .nav-link:hover::before {
+            background: var(--sidebar-icon-active);
+            transform: translateY(-50%) scale(1.5);
+        }
+        
+        /* 当前页面高亮 */
+        .nav-link.active {
+            background: var(--sidebar-active) !important;
+            color: var(--sidebar-text-active) !important;
+        }
+        
+        .dropdown-menu-custom .nav-link.active {
+            background: var(--sidebar-active) !important;
+            color: var(--sidebar-text-active) !important;
+        }
+        
+        .dropdown-menu-custom .nav-link.active::before {
+            background: var(--primary);
+            transform: translateY(-50%) scale(1.3);
+        }
+        
+        /* 当前页面在网络模块时，保持父菜单展开状态 */
+        .dropdown-hover.active-parent > .nav-link {
+            background: var(--sidebar-active) !important;
+            color: var(--sidebar-text-active) !important;
+        }
+        
+        .dropdown-hover.active-parent .dropdown-arrow {
+            transform: rotate(180deg);
+            opacity: 1;
+        }
+        
+        .dropdown-hover.active-parent .dropdown-menu-custom {
+            display: block !important;
+            opacity: 1 !important;
+            max-height: 300px !important;
+        }
+    </style>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- 顶部导航栏 -->
+    <nav class="navbar navbar-dark sticky-top bg-dark flex-md-nowrap p-0 shadow">
+        <a class="navbar-brand col-md-3 col-lg-2 me-0 px-3" href="{{ url_for('main.dashboard') }}">
+            <i class="fas fa-cloud me-2"></i>{{ app_name }}
+        </a>
+        
+        <button class="navbar-toggler position-absolute d-md-none collapsed" type="button" 
+                data-bs-toggle="collapse" data-bs-target="#sidebarMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <!-- 用户菜单 -->
+        {% if current_user.is_authenticated %}
+        <div class="navbar-nav">
+            <div class="nav-item text-nowrap dropdown">
+                <a class="nav-link px-3 dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                    <i class="fas fa-user me-1"></i>{{ current_user.username }}
+                    <span class="badge bg-secondary ms-1">{{ current_user.role }}</span>
+                </a>
+                <ul class="dropdown-menu dropdown-menu-dark">
+                    <li><a class="dropdown-item" href="{{ url_for('auth.profile') }}">
+                        <i class="fas fa-user-cog me-2"></i>个人资料
+                    </a></li>
+                    <li><a class="dropdown-item" href="{{ url_for('auth.change_password') }}">
+                        <i class="fas fa-key me-2"></i>修改密码
+                    </a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">
+                        <i class="fas fa-sign-out-alt me-2"></i>退出登录
+                    </a></li>
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 侧边栏 -->
+            {% if current_user.is_authenticated %}
+            <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('main.dashboard') }}">
+                                <i class="fas fa-tachometer-alt me-2"></i>仪表盘
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('main.clusters') }}">
+                                <i class="fas fa-server me-2"></i>集群管理
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('main.instances') }}">
+                                <i class="fas fa-desktop me-2"></i>实例管理
+                            </a>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('main.volumes') }}">
+                                <i class="fas fa-hdd me-2"></i>卷管理
+                            </a>
+                        </li>
+                        
+                        <!-- 网络管理下拉菜单 -->
+                        <li class="nav-item dropdown-hover">
+                            <a class="nav-link d-flex justify-content-between align-items-center" 
+                               href="#" id="networkDropdown" role="button">
+                                <span><i class="fas fa-network-wired me-2"></i>网络管理</span>
+                                <i class="fas fa-chevron-down dropdown-arrow"></i>
+                            </a>
+                            <div class="dropdown-menu-custom" id="networkSubmenu">
+                                <ul class="nav flex-column ms-3">
+                                    <li class="nav-item">
+                                        <a class="nav-link py-2" href="{{ url_for('main.network_topology') }}">
+                                            <i class="fas fa-project-diagram me-2"></i>网络拓扑
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link py-2" href="{{ url_for('main.networks') }}">
+                                            <i class="fas fa-globe me-2"></i>网络管理
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link py-2" href="{{ url_for('main.routers') }}">
+                                            <i class="fas fa-route me-2"></i>路由管理
+                                        </a>
+                                    </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link py-2" href="{{ url_for('main.security_groups') }}">
+                                            <i class="fas fa-shield-alt me-2"></i>安全组
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </li>
+                        
+                        <li class="nav-item">
+                            <a class="nav-link" href="{{ url_for('main.snapshots') }}">
+                                <i class="fas fa-camera me-2"></i>快照管理
+                            </a>
+                        </li>
+                        
+                        {% if current_user.can_manage_users() %}
+                        <li class="nav-item">
+                            <hr>
+                            <a class="nav-link" href="{{ url_for('admin.users') }}">
+                                <i class="fas fa-users me-2"></i>用户管理
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </nav>
+            {% endif %}
+
+            <!-- 主内容区域 -->
+            <main class="{% if current_user.is_authenticated %}col-md-9 ms-sm-auto col-lg-10 px-md-4{% else %}col-12{% endif %}">
+                <!-- Flash消息 -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                        <div class="mt-3">
+                            {% for category, message in messages %}
+                                <div class="alert alert-{% if category == 'error' %}danger{% else %}{{ category }}{% endif %} alert-dismissible fade show">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endwith %}
+
+                <!-- 页面内容 -->
+                {% block content %}{% endblock %}
+            </main>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // 页面导航高亮和悬停菜单管理
+        document.addEventListener('DOMContentLoaded', function() {
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('.nav-link');
+            
+            // 网络模块相关页面
+            const networkPages = ['/network-topology', '/networks', '/routers', '/security-groups'];
+            
+            navLinks.forEach(link => {
+                const href = link.getAttribute('href');
+                if (href === currentPath) {
+                    link.classList.add('active');
+                    
+                    // 如果是网络子模块，保持父菜单展开状态
+                    if (networkPages.includes(currentPath)) {
+                        const dropdownHover = document.querySelector('.dropdown-hover');
+                        const networkSubmenu = document.getElementById('networkSubmenu');
+                        if (dropdownHover && networkSubmenu) {
+                            dropdownHover.classList.add('active-parent');
+                            networkSubmenu.style.display = 'block';
+                            networkSubmenu.style.opacity = '1';
+                            networkSubmenu.style.maxHeight = '300px';
+                        }
+                    }
+                }
+            });
+            
+            // 为悬停菜单添加额外的交互逻辑
+            const dropdownHover = document.querySelector('.dropdown-hover');
+            const networkSubmenu = document.getElementById('networkSubmenu');
+            
+            if (dropdownHover && networkSubmenu) {
+                let hoverTimeout;
+                
+                // 鼠标进入父菜单
+                dropdownHover.addEventListener('mouseenter', function() {
+                    clearTimeout(hoverTimeout);
+                    if (!this.classList.contains('active-parent')) {
+                        networkSubmenu.style.display = 'block';
+                        setTimeout(() => {
+                            networkSubmenu.style.opacity = '1';
+                            networkSubmenu.style.maxHeight = '300px';
+                        }, 10);
+                    }
+                });
+                
+                // 鼠标离开父菜单
+                dropdownHover.addEventListener('mouseleave', function() {
+                    if (!this.classList.contains('active-parent')) {
+                        hoverTimeout = setTimeout(() => {
+                            networkSubmenu.style.opacity = '0';
+                            networkSubmenu.style.maxHeight = '0';
+                            setTimeout(() => {
+                                networkSubmenu.style.display = 'none';
+                            }, 300);
+                        }, 100);
+                    }
+                });
+                
+                // 鼠标进入子菜单时取消关闭
+                networkSubmenu.addEventListener('mouseenter', function() {
+                    clearTimeout(hoverTimeout);
+                });
+                
+                // 鼠标离开子菜单
+                networkSubmenu.addEventListener('mouseleave', function() {
+                    if (!dropdownHover.classList.contains('active-parent')) {
+                        hoverTimeout = setTimeout(() => {
+                            networkSubmenu.style.opacity = '0';
+                            networkSubmenu.style.maxHeight = '0';
+                            setTimeout(() => {
+                                networkSubmenu.style.display = 'none';
+                            }, 300);
+                        }, 100);
+                    }
+                });
+            }
+        });
+        
+        // 动态调整模态框高度以适应内容
+        function adjustModalHeight(modal) {
+            const dialog = modal.querySelector('.modal-dialog');
+            const content = modal.querySelector('.modal-content');
+            const header = modal.querySelector('.modal-header');
+            const body = modal.querySelector('.modal-body');
+            const footer = modal.querySelector('.modal-footer');
+            
+            if (!dialog || !content || !body) return;
+            
+            // 获取视口高度
+            const viewportHeight = window.innerHeight;
+            const maxModalHeight = viewportHeight - 40; // 留20px边距
+            
+            // 计算头部和底部的高度
+            let headerHeight = header ? header.offsetHeight : 0;
+            let footerHeight = footer ? footer.offsetHeight : 0;
+            
+            // 计算body可用的最大高度
+            const maxBodyHeight = maxModalHeight - headerHeight - footerHeight - 60; // 额外预留60px
+            
+            // 获取body的实际内容高度
+            const bodyScrollHeight = body.scrollHeight;
+            
+            if (bodyScrollHeight > maxBodyHeight) {
+                // 内容超出可视区域，启用滚动
+                body.style.maxHeight = maxBodyHeight + 'px';
+                body.style.overflowY = 'auto';
+                content.style.height = maxModalHeight + 'px';
+                
+                // 确保模态框居中
+                dialog.style.margin = '20px auto';
+                dialog.style.alignItems = 'flex-start';
+            } else {
+                // 内容未超出，让模态框自适应高度
+                body.style.maxHeight = 'none';
+                body.style.overflowY = 'visible';
+                content.style.height = 'auto';
+                
+                // 居中显示
+                dialog.style.alignItems = 'center';
+            }
+            
+            // 特殊处理：如果模态框包含表格或长列表
+            const tables = body.querySelectorAll('.table-responsive');
+            tables.forEach(table => {
+                if (table.scrollHeight > 400) {
+                    table.style.maxHeight = '400px';
+                    table.style.overflowY = 'auto';
+                }
+            });
+            
+            // 特殊处理：长文本内容
+            const preElements = body.querySelectorAll('pre');
+            preElements.forEach(pre => {
+                if (pre.scrollHeight > 300) {
+                    pre.style.maxHeight = '300px';
+                    pre.style.overflowY = 'auto';
+                }
+            });
+        }
+        
+        // 窗口大小改变时重新调整模态框
+        window.addEventListener('resize', function() {
+            const openModal = document.querySelector('.modal.show');
+            if (openModal) {
+                setTimeout(() => adjustModalHeight(openModal), 100);
+            }
+        });
+        
+        // 修复模态框显示问题 - 确保所有模态框都能正确显示在最顶层
+        function fixModalDisplay() {
+            const modals = document.querySelectorAll('.modal');
+            modals.forEach(modal => {
+                // 确保模态框附加到body最后
+                if (modal.parentNode !== document.body) {
+                    document.body.appendChild(modal);
+                }
+                
+                // 监听模态框显示事件
+                modal.addEventListener('show.bs.modal', function() {
+                    // 确保z-index正确
+                    this.style.zIndex = '1060';
+                    
+                    // 确保位置和显示正确
+                    this.style.display = 'block';
+                    this.style.paddingRight = '0px';
+                    
+                    // 修复模态框对话框的显示
+                    const dialog = this.querySelector('.modal-dialog');
+                    if (dialog) {
+                        dialog.style.zIndex = '1061';
+                        dialog.style.pointerEvents = 'auto';
+                    }
+                    
+                    // 确保背景遮罩正确
+                    setTimeout(() => {
+                        const backdrop = document.querySelector('.modal-backdrop');
+                        if (backdrop) {
+                            backdrop.style.zIndex = '1055';
+                        }
+                    }, 10);
+                });
+                
+                // 监听模态框显示完成事件
+                modal.addEventListener('shown.bs.modal', function() {
+                    // 确保模态框完全可见
+                    this.style.opacity = '1';
+                    this.style.visibility = 'visible';
+                    
+                    // 动态调整模态框高度
+                    adjustModalHeight(this);
+                    
+                    // 将焦点设置到模态框内的第一个可交互元素
+                    const firstInput = this.querySelector('input, button, select, textarea');
+                    if (firstInput && !firstInput.disabled) {
+                        firstInput.focus();
+                    }
+                });
+                
+                // 监听模态框隐藏事件
+                modal.addEventListener('hidden.bs.modal', function() {
+                    // 清理可能的样式问题
+                    this.style.display = 'none';
+                    document.body.classList.remove('modal-open');
+                    document.body.style.paddingRight = '';
+                    
+                    // 移除可能残留的backdrop
+                    const backdrops = document.querySelectorAll('.modal-backdrop');
+                    backdrops.forEach(backdrop => backdrop.remove());
+                });
+            });
+        }
+        
+        // 页面加载完成后修复模态框
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', fixModalDisplay);
+        } else {
+            fixModalDisplay();
+        }
+        
+        // 观察新加入的模态框元素
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1 && node.classList && node.classList.contains('modal')) {
+                        fixModalDisplay();
+                    }
+                });
+            });
+        });
+        
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        // 修复下拉菜单被遮盖问题
+        function fixDropdownDisplay() {
+            // 直接监听所有下拉按钮的点击事件
+            document.addEventListener('click', function(event) {
+                const target = event.target;
+                const dropdownButton = target.closest('[data-bs-toggle="dropdown"]');
+                
+                if (!dropdownButton) return;
+                
+                console.log('Dropdown button clicked:', dropdownButton);
+                
+                // 阻止默认的Bootstrap下拉行为
+                event.preventDefault();
+                event.stopPropagation();
+                
+                // 清理之前可能存在的临时菜单
+                const existingTempMenus = document.querySelectorAll('.dropdown-menu[style*="position: fixed"]');
+                existingTempMenus.forEach(menu => menu.remove());
+                
+                const dropdown = dropdownButton.closest('.dropdown');
+                if (!dropdown) return;
+                
+                const menu = dropdown.querySelector('.dropdown-menu');
+                if (!menu) {
+                    console.log('No menu found in dropdown:', dropdown);
+                    return;
+                }
+                
+                console.log('Menu found, creating clone...');
+                
+                // 确保下拉菜单有足够高的z-index
+                menu.style.zIndex = '1051';
+                menu.style.position = 'absolute';
+                
+                // 将下拉菜单移动到body下，避免被父容器遮盖
+                const buttonRect = dropdownButton.getBoundingClientRect();
+                const menuClone = menu.cloneNode(true);
+                
+                console.log('Menu cloned, button rect:', buttonRect);
+                
+                // 设置菜单位置 - 使用超高z-index确保在所有内容之上
+                menuClone.style.position = 'fixed';
+                menuClone.style.top = (buttonRect.bottom) + 'px';
+                menuClone.style.left = (buttonRect.left) + 'px';
+                menuClone.style.zIndex = '999999';
+                menuClone.style.display = 'block';
+                menuClone.style.opacity = '1';
+                menuClone.style.visibility = 'visible';
+                menuClone.style.pointerEvents = 'auto';
+                menuClone.style.backgroundColor = 'var(--surface)';
+                menuClone.style.border = '1px solid var(--outline-variant)';
+                menuClone.style.borderRadius = 'var(--radius-md)';
+                menuClone.style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.2)';
+                
+                console.log('Menu positioned at:', {
+                    top: menuClone.style.top,
+                    left: menuClone.style.left,
+                    zIndex: menuClone.style.zIndex
+                });
+                
+                // 添加到body
+                document.body.appendChild(menuClone);
+                
+                // 隐藏原始菜单
+                menu.style.display = 'none';
+                
+                // 存储引用以便后续清理
+                dropdown._tempMenu = menuClone;
+                
+                // 为临时菜单的每个项目添加点击事件
+                const menuItems = menuClone.querySelectorAll('.dropdown-item');
+                menuItems.forEach(item => {
+                    item.addEventListener('click', function(e) {
+                        // 执行原始的onclick处理器
+                        const originalItem = menu.querySelector(`[onclick="${this.getAttribute('onclick')}"]`);
+                        if (originalItem && originalItem.onclick) {
+                            originalItem.onclick.call(originalItem, e);
+                        } else if (this.getAttribute('onclick')) {
+                            // 直接执行onclick代码
+                            try {
+                                eval(this.getAttribute('onclick'));
+                            } catch (error) {
+                                console.error('Error executing dropdown item click:', error);
+                            }
+                        }
+                        
+                        // 立即清理菜单
+                        menuClone.remove();
+                        dropdown._tempMenu = null;
+                        menu.style.display = '';
+                    });
+                });
+                
+                // 检查菜单是否会被截断并调整位置
+                setTimeout(() => {
+                    const rect = menuClone.getBoundingClientRect();
+                    const viewportHeight = window.innerHeight;
+                    const viewportWidth = window.innerWidth;
+                    
+                    // 如果菜单底部超出视口，向上展开
+                    if (rect.bottom > viewportHeight) {
+                        menuClone.style.top = (buttonRect.top - menuClone.offsetHeight) + 'px';
+                    }
+                    
+                    // 如果菜单右侧超出视口，向左对齐
+                    if (rect.right > viewportWidth) {
+                        menuClone.style.left = (buttonRect.right - menuClone.offsetWidth) + 'px';
+                    }
+                    
+                    // 如果菜单左侧超出视口，贴左边
+                    if (rect.left < 0) {
+                        menuClone.style.left = '10px';
+                    }
+                    
+                    // 如果菜单顶部超出视口，向下调整
+                    if (rect.top < 0) {
+                        menuClone.style.top = '10px';
+                    }
+                }, 10);
+            });
+            
+            // 全局点击事件处理（处理点击外部关闭菜单）
+            document.addEventListener('click', function(event) {
+                // 如果点击的是下拉按钮，由上面的逻辑处理
+                if (event.target.closest('[data-bs-toggle="dropdown"]')) {
+                    return;
+                }
+                
+                // 如果点击的是临时菜单内的项目，不关闭（由菜单项自己处理）
+                if (event.target.closest('.dropdown-menu[style*="position: fixed"]')) {
+                    return;
+                }
+                
+                // 点击其他地方，清理所有临时菜单
+                const tempMenus = document.querySelectorAll('.dropdown-menu[style*="position: fixed"]');
+                tempMenus.forEach(menu => menu.remove());
+                
+                // 恢复所有原始菜单
+                const allMenus = document.querySelectorAll('.dropdown-menu');
+                allMenus.forEach(menu => {
+                    if (menu.style.display === 'none') {
+                        menu.style.display = '';
+                    }
+                });
+                
+                // 清理所有dropdown的临时菜单引用
+                const allDropdowns = document.querySelectorAll('.dropdown');
+                allDropdowns.forEach(dropdown => {
+                    if (dropdown._tempMenu) {
+                        dropdown._tempMenu = null;
+                    }
+                });
+            });
+            
+            // 监听ESC键关闭菜单
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') {
+                    const tempMenus = document.querySelectorAll('.dropdown-menu[style*="position: fixed"]');
+                    tempMenus.forEach(menu => menu.remove());
+                    
+                    // 恢复所有原始菜单
+                    const allMenus = document.querySelectorAll('.dropdown-menu');
+                    allMenus.forEach(menu => {
+                        if (menu.style.display === 'none') {
+                            menu.style.display = '';
+                        }
+                    });
+                }
+            });
+        }
+        
+        // 初始化下拉菜单修复
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', fixDropdownDisplay);
+        } else {
+            fixDropdownDisplay();
+        }
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

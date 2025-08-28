@@ -1,0 +1,1837 @@
+{% extends "base.html" %}
+
+{% block title %}实例管理 - {{ super() }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .instance-card {
+        transition: transform 0.2s;
+        border-left: 4px solid #dee2e6;
+    }
+    .instance-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .instance-card.status-active {
+        border-left-color: #28a745;
+    }
+    .instance-card.status-shutoff {
+        border-left-color: #dc3545;
+    }
+    .instance-card.status-suspended {
+        border-left-color: #ffc107;
+    }
+    .instance-card.status-paused {
+        border-left-color: #17a2b8;
+    }
+    .status-badge {
+        font-size: 0.8rem;
+        padding: 0.25em 0.5em;
+    }
+    .instance-actions {
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    .instance-card:hover .instance-actions {
+        opacity: 1;
+    }
+    .stats-overview {
+        margin-bottom: 2rem;
+    }
+    .loading-spinner {
+        display: none;
+    }
+    .filter-section {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+    .instance-ip {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+    .console-modal {
+        max-width: 90vw;
+        max-height: 90vh;
+    }
+    .console-iframe {
+        width: 100%;
+        height: 70vh;
+        border: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-server me-2"></i>实例管理
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <a href="{{ url_for('main.create_instance') }}" class="btn btn-success">
+                <i class="fas fa-plus me-1"></i>创建实例
+            </a>
+        </div>
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-outline-secondary" onclick="refreshInstances()">
+                <i class="fas fa-sync-alt me-1"></i>刷新
+            </button>
+        </div>
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-outline-primary" id="batchOperationBtn" onclick="toggleBatchMode()" style="display: none;">
+                <i class="fas fa-tasks me-1"></i>批量操作
+            </button>
+            <button type="button" class="btn btn-success" id="exportBtn" onclick="exportInstances()" style="display: none;">
+                <i class="fas fa-download me-1"></i>导出Excel
+            </button>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-secondary" id="viewToggle" onclick="toggleView()" title="切换视图">
+                <i class="fas fa-th me-1"></i>卡片视图
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 加载指示器 -->
+<div id="loadingIndicator" class="text-center py-4 loading-spinner">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">加载中...</span>
+    </div>
+    <p class="mt-2 text-muted">正在加载实例信息...</p>
+</div>
+
+<!-- 集群选择和统计概览 -->
+<div class="stats-overview">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <label class="form-label">选择集群</label>
+                    <select class="form-select" id="clusterSelect" onchange="onClusterChange()">
+                        <option value="">加载中...</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">总实例数</h5>
+                    <h2 class="mb-0" id="totalInstances">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">运行中</h5>
+                    <h2 class="mb-0" id="activeInstances">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">已停止</h5>
+                    <h2 class="mb-0" id="shutoffInstances">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 到期状态统计 -->
+    <div class="row mt-3">
+        <div class="col-md-4">
+            <div class="card bg-warning text-white">
+                <div class="card-body text-center">
+                    <h6 class="card-title">⚠️ 即将到期</h6>
+                    <h3 class="mb-0" id="warningInstances">-</h3>
+                    <small>24小时内到期</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <h6 class="card-title">🔥 已到期</h6>
+                    <h3 class="mb-0" id="expiredInstances">-</h3>
+                    <small>需要处理</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-light text-dark">
+                <div class="card-body text-center">
+                    <h6 class="card-title">✅ 正常</h6>
+                    <h3 class="mb-0" id="normalInstances">-</h3>
+                    <small>无到期风险</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 批量操作工具栏 -->
+<div class="alert alert-info" id="batchToolbar" style="display: none;">
+    <div class="row align-items-center">
+        <div class="col-md-6">
+            <span id="selectedCount">已选择 0 个实例</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="selectAllInstances()">
+                <i class="fas fa-check-square me-1"></i>全选
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="clearSelection()">
+                <i class="fas fa-square me-1"></i>取消选择
+            </button>
+        </div>
+        <div class="col-md-6 text-end">
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-success" onclick="batchAction('start')">
+                    <i class="fas fa-play me-1"></i>批量启动
+                </button>
+                <button type="button" class="btn btn-sm btn-warning" onclick="batchAction('stop')">
+                    <i class="fas fa-stop me-1"></i>批量停止
+                </button>
+                <button type="button" class="btn btn-sm btn-info" onclick="batchAction('restart')">
+                    <i class="fas fa-redo me-1"></i>批量重启
+                </button>
+                {% if current_user.has_role(['super_admin', 'admin']) %}
+                <button type="button" class="btn btn-sm btn-danger" onclick="batchAction('delete')">
+                    <i class="fas fa-trash me-1"></i>批量删除
+                </button>
+                {% endif %}
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary ms-2" onclick="toggleBatchMode()">
+                <i class="fas fa-times me-1"></i>退出批量模式
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 过滤器 -->
+<div class="filter-section" id="filterSection" style="display: none;">
+    <div class="row">
+        <div class="col-md-3">
+            <label class="form-label">状态过滤</label>
+            <select class="form-select" id="statusFilter" onchange="applyFilters()">
+                <option value="">所有状态</option>
+                <option value="ACTIVE">运行中</option>
+                <option value="SHUTOFF">已停止</option>
+                <option value="SUSPENDED">已挂起</option>
+                <option value="PAUSED">已暂停</option>
+                <option value="ERROR">错误</option>
+                <option value="BUILD">构建中</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">到期状态</label>
+            <select class="form-select" id="expireFilter" onchange="applyFilters()">
+                <option value="">所有到期状态</option>
+                <option value="normal">正常</option>
+                <option value="warning" class="text-warning">24小时内到期</option>
+                <option value="expired" class="text-danger">已到期</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">搜索</label>
+            <input type="text" class="form-control" id="searchInput" placeholder="实例名称或ID..." onkeyup="debounceSearch()">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">每页显示</label>
+            <select class="form-select" id="perPageSelect" onchange="applyFilters()">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- 实例列表 -->
+<div class="card" id="instancesCard" style="display: none;">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-list me-2"></i>实例列表
+            <span class="badge bg-secondary ms-2" id="instanceCount">0</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        <!-- 卡片视图 -->
+        <div id="cardView">
+            <div id="instancesContainer" class="row">
+                <!-- 实例卡片将通过JavaScript动态加载 -->
+            </div>
+        </div>
+        
+        <!-- 表格视图 -->
+        <div id="tableView" style="display: none;">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th width="40" id="batchSelectHeader" style="display: none;">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
+                            </th>
+                            <th>名称</th>
+                            <th>集群</th>
+                            <th>状态</th>
+                            <th>规格</th>
+                            <th>镜像</th>
+                            <th>IP地址</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="instancesTableBody">
+                        <!-- 表格行将通过JavaScript动态加载 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div id="emptyState" class="text-center py-5 text-muted" style="display: none;">
+            <i class="fas fa-server fa-3x mb-3"></i>
+            <h5>没有找到实例</h5>
+            <p>选择一个集群开始管理实例</p>
+        </div>
+    </div>
+</div>
+
+<!-- 分页 -->
+<nav class="mt-4" id="paginationContainer" style="display: none;">
+    <ul class="pagination justify-content-center" id="pagination">
+    </ul>
+</nav>
+
+<!-- 实例详情模态框 -->
+<div class="modal fade" id="instanceDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-server me-2"></i>实例详情
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="instanceDetailContent">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 控制台模态框 -->
+<div class="modal fade" id="consoleModal" tabindex="-1">
+    <div class="modal-dialog console-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-terminal me-2"></i>实例控制台
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="consoleFrame" class="console-iframe" src="about:blank"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 操作确认模态框 -->
+<div class="modal fade" id="actionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>确认操作
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="actionMessage">您确定要执行此操作吗？</p>
+                <div id="actionOptions" style="display: none;">
+                    <label class="form-label">重启类型:</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="restartType" id="softRestart" value="soft" checked>
+                        <label class="form-check-label" for="softRestart">软重启 (推荐)</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="restartType" id="hardRestart" value="hard">
+                        <label class="form-check-label" for="hardRestart">硬重启</label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmActionBtn" onclick="confirmAction()">确认</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 重命名实例模态框 -->
+<div class="modal fade" id="renameModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit me-2"></i>重命名实例
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="renameForm">
+                    <div class="mb-3">
+                        <label class="form-label">当前名称</label>
+                        <input type="text" class="form-control" id="currentName" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">新名称 *</label>
+                        <input type="text" class="form-control" id="newName" required placeholder="请输入新的实例名称">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="confirmRename()">确认重命名</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 销毁时间设置模态框 -->
+<div class="modal fade" id="destroyTimerModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-clock me-2"></i>设置销毁时间
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="destroyTimerForm">
+                    <div class="mb-3">
+                        <label class="form-label">实例名称</label>
+                        <input type="text" class="form-control" id="destroyInstanceName" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">销毁时间 *</label>
+                        <input type="datetime-local" class="form-control" id="destroyDateTime" required>
+                    </div>
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>警告：</strong>实例将在指定时间自动销毁，此操作不可逆！
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDestroyTimer()">设置销毁时间</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 批量操作结果模态框 -->
+<div class="modal fade" id="batchResultModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-tasks me-2"></i>批量操作结果
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="batchResultContent">
+                    <!-- 结果内容将通过JavaScript填充 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/instances-enhanced.js') }}"></script>
+<script>
+    let currentClusterId = null;
+    let currentPage = 1;
+    let currentFilters = {};
+    let isLoading = false;
+    let searchTimeout = null;
+    let pendingAction = null;
+    let selectedInstances = new Set();
+    let isBatchMode = false;
+    let currentView = 'card'; // 'card' or 'table'
+    let currentRenameInstance = null;
+    let expireCheckInterval = null;
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        loadClusters();
+        startExpireCheck();
+    });
+
+    // 加载集群列表
+    async function loadClusters() {
+        try {
+            const response = await fetch('/api/clusters');
+            const data = await response.json();
+            
+            if (data.success) {
+                const select = document.getElementById('clusterSelect');
+                select.innerHTML = '<option value="">所有集群</option>';
+                
+                let firstConnectedCluster = null;
+                
+                data.data.forEach(cluster => {
+                    const option = document.createElement('option');
+                    option.value = cluster.id;
+                    option.textContent = `${cluster.name} (${cluster.connection_status})`;
+                    if (cluster.connection_status !== 'connected') {
+                        option.disabled = true;
+                        option.textContent += ' - 连接失败';
+                    } else if (!firstConnectedCluster) {
+                        firstConnectedCluster = cluster;
+                    }
+                    select.appendChild(option);
+                });
+                
+                // 自动选择第一个可用集群
+                if (firstConnectedCluster) {
+                    select.value = firstConnectedCluster.id;
+                    currentClusterId = firstConnectedCluster.id;
+                    onClusterChange();
+                }
+            }
+        } catch (error) {
+            console.error('Error loading clusters:', error);
+            showAlert('加载集群列表失败', 'danger');
+        }
+    }
+
+    // 集群选择变化
+    function onClusterChange() {
+        const select = document.getElementById('clusterSelect');
+        const selectedValue = select.value;
+        currentClusterId = selectedValue ? parseInt(selectedValue) : null;
+        
+        // 显示相关界面元素
+        document.getElementById('filterSection').style.display = 'block';
+        document.getElementById('instancesCard').style.display = 'block';
+        document.getElementById('batchOperationBtn').style.display = 'inline-block';
+        document.getElementById('exportBtn').style.display = 'inline-block';
+        currentPage = 1;
+        
+        // 根据选择的集群类型加载实例
+        if (selectedValue === '') {
+            // 选择"所有集群"
+            loadAllClustersInstances();
+        } else {
+            // 选择特定集群
+            loadInstances();
+            // 选择集群后立即检查到期实例
+            setTimeout(() => checkExpiredInstances(), 1000);
+        }
+    }
+
+    // 加载所有集群的实例列表
+    async function loadAllClustersInstances(page = 1) {
+        if (isLoading) return;
+        
+        showLoading(true);
+        
+        try {
+            const params = new URLSearchParams({
+                page: page,
+                per_page: document.getElementById('perPageSelect').value
+            });
+            
+            // 添加过滤参数
+            const status = document.getElementById('statusFilter').value;
+            const search = document.getElementById('searchInput').value;
+            const expireFilter = document.getElementById('expireFilter').value;
+            
+            if (status) params.append('status', status);
+            if (search) params.append('search', search);
+            if (expireFilter) params.append('expire_filter', expireFilter);
+            
+            const response = await fetch(`/api/instances/all-clusters?${params}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                renderInstances(data.data);
+                renderPagination(data.pagination);
+                updateStats(data.statistics);
+                currentPage = page;
+            } else {
+                showAlert('加载实例失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading all cluster instances:', error);
+            showAlert('网络错误，请检查连接', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 加载实例列表
+    async function loadInstances(page = 1) {
+        if (!currentClusterId || isLoading) return;
+        
+        showLoading(true);
+        
+        try {
+            const params = new URLSearchParams({
+                cluster_id: currentClusterId,
+                page: page,
+                per_page: document.getElementById('perPageSelect').value
+            });
+            
+            // 添加过滤参数
+            const status = document.getElementById('statusFilter').value;
+            const search = document.getElementById('searchInput').value;
+            const expireFilter = document.getElementById('expireFilter').value;
+            
+            if (status) params.append('status', status);
+            if (search) params.append('search', search);
+            if (expireFilter) params.append('expire_filter', expireFilter);
+            
+            const response = await fetch(`/api/instances?${params}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                renderInstances(data.data);
+                renderPagination(data.pagination);
+                updateStats(data.statistics);
+                currentPage = page;
+            } else {
+                showAlert('加载实例失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading instances:', error);
+            showAlert('网络错误，请检查连接', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 渲染实例列表
+    function renderInstances(instances) {
+        const emptyState = document.getElementById('emptyState');
+        const instanceCount = document.getElementById('instanceCount');
+        
+        instanceCount.textContent = instances.length;
+        
+        if (instances.length === 0) {
+            if (currentView === 'card') {
+                document.getElementById('instancesContainer').innerHTML = '';
+            } else {
+                document.getElementById('instancesTableBody').innerHTML = `<tr><td colspan="${isBatchMode ? '8' : '7'}" class="text-center text-muted">没有找到实例</td></tr>`;
+            }
+            emptyState.style.display = 'block';
+            return;
+        }
+        
+        emptyState.style.display = 'none';
+        
+        if (currentView === 'table') {
+            renderInstanceTable(instances);
+            return;
+        }
+        
+        // 卡片视图渲染
+        const container = document.getElementById('instancesContainer');
+        container.innerHTML = instances.map(instance => `
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card instance-card status-${instance.status.toLowerCase()} ${selectedInstances.has(instance.id) ? 'border-primary' : ''}" data-instance-id="${instance.id}">
+                    ${isBatchMode ? `
+                    <div class="card-header d-flex align-items-center">
+                        <input type="checkbox" class="form-check-input instance-checkbox me-2" value="${instance.id}" 
+                               ${selectedInstances.has(instance.id) ? 'checked' : ''} 
+                               onchange="toggleInstanceSelection('${instance.id}')">
+                        <h6 class="mb-0 flex-grow-1">
+                            <i class="fas fa-server me-2"></i>
+                            ${instance.name}
+                        </h6>
+                        <div class="instance-actions">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="viewInstanceDetail('${instance.id}')">
+                                        <i class="fas fa-eye me-2"></i>查看详情
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="openConsole('${instance.id}')">
+                                        <i class="fas fa-terminal me-2"></i>控制台
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="#" onclick="renameInstance('${instance.id}', '${instance.name}')">
+                                        <i class="fas fa-edit me-2"></i>重命名
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="setDestroyTimer('${instance.id}', '${instance.name}')">
+                                        <i class="fas fa-clock me-2 text-warning"></i>设置销毁时间
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    ${getActionMenuItems(instance)}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    ` : `
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">
+                            <i class="fas fa-server me-2"></i>
+                            ${instance.name}
+                        </h6>
+                        <div class="instance-actions">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="viewInstanceDetail('${instance.id}')">
+                                        <i class="fas fa-eye me-2"></i>查看详情
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="openConsole('${instance.id}')">
+                                        <i class="fas fa-terminal me-2"></i>控制台
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="#" onclick="renameInstance('${instance.id}', '${instance.name}')">
+                                        <i class="fas fa-edit me-2"></i>重命名
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="setDestroyTimer('${instance.id}', '${instance.name}')">
+                                        <i class="fas fa-clock me-2 text-warning"></i>设置销毁时间
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    ${getActionMenuItems(instance)}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    `}
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <span class="badge status-badge ${getStatusClass(instance.status)}">
+                                ${getStatusText(instance.status)}
+                            </span>
+                            <span class="badge bg-secondary ms-1">${instance.flavor.name}</span>
+                            ${instance.cluster_name ? `<span class="badge bg-info ms-1">${instance.cluster_name}</span>` : ''}
+                        </div>
+                        
+                        <div class="mb-2">
+                            <small class="text-muted">
+                                <i class="fas fa-hdd me-1"></i>
+                                镜像: ${instance.image.name}
+                            </small>
+                        </div>
+                        
+                        ${getInstanceIPs(instance.addresses)}
+                        
+                        ${instance.metadata && instance.metadata.destroy_at ? 
+                            `<div class="mb-2">
+                                <small class="${getExpireStatusClass(instance.expire_status)}">
+                                    <i class="fas fa-clock me-1"></i>
+                                    销毁: ${formatTime(instance.metadata.destroy_at)}
+                                    ${getExpireStatusBadge(instance.expire_status)}
+                                </small>
+                            </div>` : ''
+                        }
+                        
+                        <hr>
+                        <small class="text-muted">
+                            <i class="fas fa-clock me-1"></i>
+                            创建: ${formatTime(instance.created)}
+                        </small>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // 获取状态样式类
+    function getStatusClass(status) {
+        const classes = {
+            'ACTIVE': 'bg-success',
+            'SHUTOFF': 'bg-danger',
+            'SUSPENDED': 'bg-warning',
+            'PAUSED': 'bg-info',
+            'ERROR': 'bg-danger',
+            'BUILD': 'bg-primary',
+            'REBOOT': 'bg-warning'
+        };
+        return classes[status] || 'bg-secondary';
+    }
+
+    // 获取状态文本
+    function getStatusText(status) {
+        const texts = {
+            'ACTIVE': '运行中',
+            'SHUTOFF': '已停止',
+            'SUSPENDED': '已挂起',
+            'PAUSED': '已暂停',
+            'ERROR': '错误',
+            'BUILD': '构建中',
+            'REBOOT': '重启中'
+        };
+        return texts[status] || status;
+    }
+
+    // 获取实例IP地址显示
+    function getInstanceIPs(addresses) {
+        if (!addresses || Object.keys(addresses).length === 0) {
+            return '<div class="instance-ip">无网络连接</div>';
+        }
+        
+        let ipHtml = '';
+        for (const [network, ips] of Object.entries(addresses)) {
+            ips.forEach(ip => {
+                ipHtml += `<div class="instance-ip">
+                    <i class="fas fa-network-wired me-1"></i>
+                    ${network}: ${ip.addr}
+                </div>`;
+            });
+        }
+        return ipHtml;
+    }
+
+    // 获取操作菜单项
+    function getActionMenuItems(instance) {
+        const status = instance.status;
+        let items = [];
+        
+        if (status === 'SHUTOFF') {
+            items.push('<li><a class="dropdown-item" href="#" onclick="performAction(\'' + instance.id + '\', \'start\', \'' + instance.name + '\')"><i class="fas fa-play me-2 text-success"></i>启动</a></li>');
+        }
+        
+        if (status === 'ACTIVE') {
+            items.push('<li><a class="dropdown-item" href="#" onclick="performAction(\'' + instance.id + '\', \'stop\', \'' + instance.name + '\')"><i class="fas fa-stop me-2 text-danger"></i>停止</a></li>');
+            items.push('<li><a class="dropdown-item" href="#" onclick="performAction(\'' + instance.id + '\', \'restart\', \'' + instance.name + '\')"><i class="fas fa-redo me-2 text-warning"></i>重启</a></li>');
+        }
+        
+        if (status === 'ACTIVE') {
+            items.push('<li><a class="dropdown-item" href="#" onclick="performAction(\'' + instance.id + '\', \'pause\', \'' + instance.name + '\')"><i class="fas fa-pause me-2 text-info"></i>暂停</a></li>');
+            items.push('<li><a class="dropdown-item" href="#" onclick="performAction(\'' + instance.id + '\', \'suspend\', \'' + instance.name + '\')"><i class="fas fa-moon me-2 text-warning"></i>挂起</a></li>');
+        }
+        
+        if (status === 'PAUSED') {
+            items.push('<li><a class="dropdown-item" href="#" onclick="performAction(\'' + instance.id + '\', \'unpause\', \'' + instance.name + '\')"><i class="fas fa-play me-2 text-success"></i>恢复</a></li>');
+        }
+        
+        if (status === 'SUSPENDED') {
+            items.push('<li><a class="dropdown-item" href="#" onclick="performAction(\'' + instance.id + '\', \'resume\', \'' + instance.name + '\')"><i class="fas fa-play me-2 text-success"></i>恢复</a></li>');
+        }
+        
+        if (items.length > 0) {
+            items.push('<li><hr class="dropdown-divider"></li>');
+        }
+        
+        {% if current_user.has_role(['super_admin', 'admin']) %}
+        items.push('<li><a class="dropdown-item text-danger" href="#" onclick="performAction(\'' + instance.id + '\', \'delete\', \'' + instance.name + '\')"><i class="fas fa-trash me-2"></i>删除</a></li>');
+        {% endif %}
+        
+        return items.join('');
+    }
+
+    // 更新统计信息
+    function updateStats(stats) {
+        document.getElementById('totalInstances').textContent = stats.total_instances;
+        document.getElementById('activeInstances').textContent = stats.status_counts['ACTIVE'] || 0;
+        document.getElementById('shutoffInstances').textContent = stats.status_counts['SHUTOFF'] || 0;
+        
+        // 更新到期状态统计
+        if (stats.expire_counts) {
+            document.getElementById('warningInstances').textContent = stats.expire_counts['warning'] || 0;
+            document.getElementById('expiredInstances').textContent = stats.expire_counts['expired'] || 0;
+            document.getElementById('normalInstances').textContent = stats.expire_counts['normal'] || 0;
+            
+            // 如果有到期或即将到期的实例，显示警告
+            showExpireWarning(stats.expire_counts);
+        }
+    }
+
+    // 重置统计信息
+    function resetStats() {
+        document.getElementById('totalInstances').textContent = '-';
+        document.getElementById('activeInstances').textContent = '-';
+        document.getElementById('shutoffInstances').textContent = '-';
+        document.getElementById('warningInstances').textContent = '-';
+        document.getElementById('expiredInstances').textContent = '-';
+        document.getElementById('normalInstances').textContent = '-';
+    }
+
+    // 应用过滤器
+    function applyFilters() {
+        currentPage = 1;
+        const select = document.getElementById('clusterSelect');
+        if (select.value === '') {
+            loadAllClustersInstances();
+        } else {
+            loadInstances();
+        }
+    }
+
+    // 防抖搜索
+    function debounceSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            applyFilters();
+        }, 300);
+    }
+
+    // 刷新实例列表
+    function refreshInstances() {
+        const select = document.getElementById('clusterSelect');
+        if (select.value === '') {
+            loadAllClustersInstances(currentPage);
+        } else {
+            if (!currentClusterId) {
+                showAlert('请先选择一个集群', 'warning');
+                return;
+            }
+            loadInstances(currentPage);
+        }
+    }
+
+    // 查看实例详情
+    async function viewInstanceDetail(instanceId) {
+        try {
+            document.getElementById('instanceDetailContent').innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                </div>
+            `;
+            
+            new bootstrap.Modal(document.getElementById('instanceDetailModal')).show();
+            
+            const response = await fetch(`/api/instances/${instanceId}?cluster_id=${currentClusterId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                renderInstanceDetail(data.data);
+            } else {
+                document.getElementById('instanceDetailContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        加载失败: ${data.error}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading instance detail:', error);
+            document.getElementById('instanceDetailContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    网络错误，请重试
+                </div>
+            `;
+        }
+    }
+
+    // 渲染实例详情
+    function renderInstanceDetail(instance) {
+        document.getElementById('instanceDetailContent').innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>基本信息</h6>
+                    <table class="table table-sm">
+                        <tr><td>名称</td><td>${instance.name}</td></tr>
+                        <tr><td>ID</td><td><code>${instance.id}</code></td></tr>
+                        <tr><td>状态</td><td><span class="badge ${getStatusClass(instance.status)}">${getStatusText(instance.status)}</span></td></tr>
+                        <tr><td>电源状态</td><td>${instance.power_state}</td></tr>
+                        <tr><td>可用区</td><td>${instance.availability_zone || '-'}</td></tr>
+                        <tr><td>主机</td><td>${instance.host || '-'}</td></tr>
+                        <tr><td>创建时间</td><td>${formatTime(instance.created)}</td></tr>
+                        <tr><td>更新时间</td><td>${formatTime(instance.updated)}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6>规格信息</h6>
+                    <table class="table table-sm">
+                        <tr><td>规格</td><td>${instance.flavor.name}</td></tr>
+                        <tr><td>vCPU</td><td>${instance.flavor.vcpus}</td></tr>
+                        <tr><td>内存</td><td>${instance.flavor.ram} MB</td></tr>
+                        <tr><td>磁盘</td><td>${instance.flavor.disk} GB</td></tr>
+                        <tr><td>镜像</td><td>${instance.image.name}</td></tr>
+                        <tr><td>密钥对</td><td>${instance.key_name || '-'}</td></tr>
+                        <tr><td>安全组</td><td>${instance.security_groups.join(', ') || '-'}</td></tr>
+                    </table>
+                </div>
+            </div>
+            
+            <h6 class="mt-3">网络信息</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr><th>网络</th><th>IP地址</th><th>类型</th></tr>
+                    </thead>
+                    <tbody>
+                        ${Object.entries(instance.addresses).map(([network, ips]) => 
+                            ips.map(ip => `<tr><td>${network}</td><td>${ip.addr}</td><td>${ip['OS-EXT-IPS:type']}</td></tr>`).join('')
+                        ).join('')}
+                    </tbody>
+                </table>
+            </div>
+            
+            <h6 class="mt-3">控制台日志 (最近50行)</h6>
+            <pre class="bg-dark text-light p-3" style="height: 200px; overflow-y: auto; font-size: 0.8rem;">${instance.console_log}</pre>
+        `;
+    }
+
+    // 执行实例操作
+    function performAction(instanceId, action, instanceName) {
+        pendingAction = {
+            instanceId: instanceId,
+            action: action,
+            instanceName: instanceName
+        };
+        
+        const actionMessages = {
+            'start': `启动实例 "${instanceName}"`,
+            'stop': `停止实例 "${instanceName}"`,
+            'restart': `重启实例 "${instanceName}"`,
+            'pause': `暂停实例 "${instanceName}"`,
+            'unpause': `恢复实例 "${instanceName}"`,
+            'suspend': `挂起实例 "${instanceName}"`,
+            'resume': `恢复实例 "${instanceName}"`,
+            'delete': `删除实例 "${instanceName}"，此操作不可逆！`
+        };
+        
+        document.getElementById('actionMessage').textContent = `您确定要${actionMessages[action]}吗？`;
+        
+        // 显示重启选项
+        const actionOptions = document.getElementById('actionOptions');
+        if (action === 'restart') {
+            actionOptions.style.display = 'block';
+        } else {
+            actionOptions.style.display = 'none';
+        }
+        
+        // 设置确认按钮样式
+        const confirmBtn = document.getElementById('confirmActionBtn');
+        if (action === 'delete') {
+            confirmBtn.className = 'btn btn-danger';
+            confirmBtn.textContent = '确认删除';
+        } else {
+            confirmBtn.className = 'btn btn-primary';
+            confirmBtn.textContent = '确认';
+        }
+        
+        new bootstrap.Modal(document.getElementById('actionModal')).show();
+    }
+
+    // 确认操作
+    async function confirmAction() {
+        if (!pendingAction) return;
+        
+        const { instanceId, action, instanceName } = pendingAction;
+        const modal = bootstrap.Modal.getInstance(document.getElementById('actionModal'));
+        
+        try {
+            const requestData = { action: action };
+            
+            // 重启操作需要指定类型
+            if (action === 'restart') {
+                const restartType = document.querySelector('input[name="restartType"]:checked').value;
+                requestData.restart_type = restartType;
+            }
+            
+            const response = await fetch(`/api/instances/${instanceId}/action?cluster_id=${currentClusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert(data.message, 'success');
+                modal.hide();
+                
+                // 延迟刷新列表以显示状态变化
+                setTimeout(() => {
+                    loadInstances(currentPage);
+                }, 2000);
+            } else {
+                showAlert('操作失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error performing action:', error);
+            showAlert('操作失败，请重试', 'danger');
+        }
+        
+        pendingAction = null;
+    }
+
+    // 打开控制台
+    async function openConsole(instanceId) {
+        try {
+            const response = await fetch(`/api/instances/${instanceId}/console?cluster_id=${currentClusterId}&type=vnc`);
+            const data = await response.json();
+            
+            if (data.success) {
+                document.getElementById('consoleFrame').src = data.data.url;
+                new bootstrap.Modal(document.getElementById('consoleModal')).show();
+            } else {
+                showAlert('打开控制台失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error opening console:', error);
+            showAlert('网络错误，请重试', 'danger');
+        }
+    }
+
+    // 工具函数
+    function showLoading(show) {
+        const indicator = document.getElementById('loadingIndicator');
+        const content = document.getElementById('instancesCard');
+        
+        if (show) {
+            indicator.style.display = 'block';
+            if (content) content.style.opacity = '0.5';
+        } else {
+            indicator.style.display = 'none';
+            if (content) content.style.opacity = '1';
+        }
+        isLoading = show;
+    }
+
+    function formatTime(isoString) {
+        if (!isoString) return '-';
+        const date = new Date(isoString);
+        return date.toLocaleString('zh-CN');
+    }
+
+    function showAlert(message, type) {
+        // 移除现有的alert
+        const existingAlerts = document.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const content = document.querySelector('main');
+        content.insertBefore(alertDiv, content.firstChild);
+        
+        // 自动删除
+        if (type !== 'info') {
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+    }
+
+    // 渲染分页
+    function renderPagination(pagination) {
+        const container = document.getElementById('paginationContainer');
+        const ul = document.getElementById('pagination');
+
+        if (pagination.pages <= 1) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        ul.innerHTML = '';
+
+        // 上一页
+        if (pagination.has_prev) {
+            ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="loadInstances(${pagination.page - 1})">上一页</a></li>`;
+        }
+
+        // 页码
+        for (let i = 1; i <= pagination.pages; i++) {
+            const active = i === pagination.page ? 'active' : '';
+            ul.innerHTML += `<li class="page-item ${active}"><a class="page-link" href="#" onclick="loadInstances(${i})">${i}</a></li>`;
+        }
+
+        // 下一页
+        if (pagination.has_next) {
+            ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="loadInstances(${pagination.page + 1})">下一页</a></li>`;
+        }
+    }
+
+    // 显示到期警告
+    function showExpireWarning(expireCounts) {
+        const expiredCount = expireCounts.expired || 0;
+        const warningCount = expireCounts.warning || 0;
+        
+        if (expiredCount > 0) {
+            showAlert(
+                `🔥 注意：有 ${expiredCount} 个实例已到期，请及时处理！<a href="#" onclick="document.getElementById('expireFilter').value='expired'; applyFilters();" class="alert-link ms-2">查看已到期实例</a>`,
+                'danger'
+            );
+        } else if (warningCount > 0) {
+            showAlert(
+                `⚠️ 提醒：有 ${warningCount} 个实例将在24小时内到期！<a href="#" onclick="document.getElementById('expireFilter').value='warning'; applyFilters();" class="alert-link ms-2">查看即将到期实例</a>`,
+                'warning'
+            );
+        }
+    }
+
+    // 获取到期状态样式类
+    function getExpireStatusClass(expireStatus) {
+        const classes = {
+            'normal': 'text-muted',
+            'warning': 'text-warning',
+            'expired': 'text-danger'
+        };
+        return classes[expireStatus] || 'text-muted';
+    }
+
+    // 获取到期状态徽章
+    function getExpireStatusBadge(expireStatus) {
+        const badges = {
+            'normal': '',
+            'warning': '<span class="badge bg-warning ms-1">即将到期</span>',
+            'expired': '<span class="badge bg-danger ms-1">已到期</span>'
+        };
+        return badges[expireStatus] || '';
+    }
+
+    // 启动到期检查
+    function startExpireCheck() {
+        // 每5分钟检查一次到期实例
+        expireCheckInterval = setInterval(() => {
+            if (currentClusterId) {
+                checkExpiredInstances();
+            }
+        }, 300000); // 5分钟
+        
+        // 页面切换时也检查一次
+        if (currentClusterId) {
+            setTimeout(() => checkExpiredInstances(), 2000);
+        }
+    }
+
+    // 检查到期实例
+    async function checkExpiredInstances() {
+        if (!currentClusterId) return;
+        
+        try {
+            const response = await fetch(`/api/instances/check-expired?cluster_id=${currentClusterId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                const expiredCount = data.data.expired_count;
+                const warningCount = data.data.warning_count;
+                
+                if (expiredCount > 0) {
+                    // 显示严重警告 - 已到期实例
+                    showAlert(
+                        `🔥 紧急提醒：发现 ${expiredCount} 个实例已经到期！请立即处理！<br>` +
+                        `<button class="btn btn-sm btn-outline-light mt-1" onclick="document.getElementById('expireFilter').value='expired'; applyFilters();">` +
+                        `<i class="fas fa-search me-1"></i>查看已到期实例</button>`,
+                        'danger'
+                    );
+                    
+                    // 更新页面标题显示警告
+                    document.title = `(${expiredCount}) 实例管理 - OpenStack运维平台`;
+                } else if (warningCount > 0) {
+                    // 显示警告 - 即将到期实例
+                    showAlert(
+                        `⚠️ 到期提醒：有 ${warningCount} 个实例将在24小时内到期，请及时处理！<br>` +
+                        `<button class="btn btn-sm btn-outline-dark mt-1" onclick="document.getElementById('expireFilter').value='warning'; applyFilters();">` +
+                        `<i class="fas fa-search me-1"></i>查看即将到期实例</button>`,
+                        'warning'
+                    );
+                } else {
+                    // 重置页面标题
+                    document.title = '实例管理 - OpenStack运维平台';
+                }
+            }
+        } catch (error) {
+            console.error('检查到期实例失败:', error);
+        }
+    }
+
+    // 页面卸载时清理定时器
+    window.addEventListener('beforeunload', function() {
+        if (expireCheckInterval) {
+            clearInterval(expireCheckInterval);
+        }
+    });
+
+    // ===============================================
+    // 增强功能函数 - 批量操作、视图切换、导出等
+    // ===============================================
+    
+    // 获取IP地址的文本格式（供表格视图使用）
+    function getInstanceIPsText(addresses) {
+        if (!addresses || Object.keys(addresses).length === 0) {
+            return '无';
+        }
+        
+        let ips = [];
+        for (const [network, addrs] of Object.entries(addresses)) {
+            addrs.forEach(addr => {
+                ips.push(`${network}:${addr.addr}`);
+            });
+        }
+        return ips.join('<br>');
+    }
+
+    // 切换视图模式
+    function toggleView() {
+        const cardView = document.getElementById('cardView');
+        const tableView = document.getElementById('tableView');
+        const viewToggle = document.getElementById('viewToggle');
+        const batchSelectHeader = document.getElementById('batchSelectHeader');
+        
+        if (currentView === 'card') {
+            // 切换到表格视图
+            cardView.style.display = 'none';
+            tableView.style.display = 'block';
+            viewToggle.innerHTML = '<i class="fas fa-table me-1"></i>表格视图';
+            currentView = 'table';
+            
+            // 在表格视图中显示批量选择
+            if (isBatchMode) {
+                batchSelectHeader.style.display = 'table-cell';
+            }
+            
+            // 重新渲染数据为表格格式
+            loadInstances(currentPage);
+        } else {
+            // 切换到卡片视图
+            cardView.style.display = 'block';
+            tableView.style.display = 'none';
+            viewToggle.innerHTML = '<i class="fas fa-th me-1"></i>卡片视图';
+            currentView = 'card';
+            
+            // 重新渲染数据为卡片格式
+            loadInstances(currentPage);
+        }
+    }
+
+    // 渲染表格视图
+    function renderInstanceTable(instances) {
+        const tbody = document.getElementById('instancesTableBody');
+        
+        if (instances.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${isBatchMode ? '9' : '8'}" class="text-center text-muted">没有找到实例</td></tr>`;
+            return;
+        }
+        
+        tbody.innerHTML = instances.map(instance => `
+            <tr data-instance-id="${instance.id}" ${selectedInstances.has(instance.id) ? 'class="table-active"' : ''}>
+                ${isBatchMode ? `
+                <td>
+                    <input type="checkbox" class="instance-checkbox" value="${instance.id}" 
+                           ${selectedInstances.has(instance.id) ? 'checked' : ''} 
+                           onchange="toggleInstanceSelection('${instance.id}')">
+                </td>
+                ` : ''}
+                <td>
+                    <strong>${instance.name}</strong>
+                    ${instance.metadata && instance.metadata.destroy_at ? 
+                        `<br><small class="${getExpireStatusClass(instance.expire_status)}">
+                            <i class="fas fa-clock"></i> 销毁: ${formatTime(instance.metadata.destroy_at)}
+                            ${getExpireStatusBadge(instance.expire_status)}
+                        </small>` : ''
+                    }
+                </td>
+                <td>
+                    <span class="badge bg-info">
+                        ${instance.cluster_name || '未知集群'}
+                    </span>
+                </td>
+                <td>
+                    <span class="badge ${getStatusClass(instance.status)}">
+                        ${getStatusText(instance.status)}
+                    </span>
+                </td>
+                <td>${instance.flavor.name}</td>
+                <td>${instance.image.name}</td>
+                <td>${getInstanceIPsText(instance.addresses)}</td>
+                <td>${formatTime(instance.created)}</td>
+                <td>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="viewInstanceDetail('${instance.id}')">
+                                <i class="fas fa-eye me-2"></i>查看详情
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="openConsole('${instance.id}')">
+                                <i class="fas fa-terminal me-2"></i>控制台
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#" onclick="renameInstance('${instance.id}', '${instance.name}')">
+                                <i class="fas fa-edit me-2"></i>重命名
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="setDestroyTimer('${instance.id}', '${instance.name}')">
+                                <i class="fas fa-clock me-2 text-warning"></i>设置销毁时间
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            ${getActionMenuItems(instance)}
+                        </ul>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // 切换批量模式
+    function toggleBatchMode() {
+        isBatchMode = !isBatchMode;
+        
+        const batchToolbar = document.getElementById('batchToolbar');
+        const batchOperationBtn = document.getElementById('batchOperationBtn');
+        const batchSelectHeader = document.getElementById('batchSelectHeader');
+        
+        if (isBatchMode) {
+            batchToolbar.style.display = 'block';
+            batchOperationBtn.innerHTML = '<i class="fas fa-times me-1"></i>退出批量';
+            batchOperationBtn.className = 'btn btn-outline-danger';
+            
+            if (currentView === 'table') {
+                batchSelectHeader.style.display = 'table-cell';
+            }
+        } else {
+            batchToolbar.style.display = 'none';
+            batchOperationBtn.innerHTML = '<i class="fas fa-tasks me-1"></i>批量操作';
+            batchOperationBtn.className = 'btn btn-outline-primary';
+            
+            if (currentView === 'table') {
+                batchSelectHeader.style.display = 'none';
+            }
+            
+            // 清除选择
+            clearSelection();
+        }
+        
+        // 重新渲染列表
+        const select = document.getElementById('clusterSelect');
+        if (select.value === '') {
+            loadAllClustersInstances(currentPage);
+        } else {
+            loadInstances(currentPage);
+        }
+    }
+
+    // 切换实例选择状态
+    function toggleInstanceSelection(instanceId) {
+        if (selectedInstances.has(instanceId)) {
+            selectedInstances.delete(instanceId);
+        } else {
+            selectedInstances.add(instanceId);
+        }
+        
+        updateSelectedCount();
+        updateSelectAllCheckbox();
+        
+        // 更新视觉效果
+        const element = document.querySelector(`[data-instance-id="${instanceId}"]`);
+        if (element) {
+            if (selectedInstances.has(instanceId)) {
+                if (currentView === 'card') {
+                    element.classList.add('border-primary');
+                } else {
+                    element.classList.add('table-active');
+                }
+            } else {
+                if (currentView === 'card') {
+                    element.classList.remove('border-primary');
+                } else {
+                    element.classList.remove('table-active');
+                }
+            }
+        }
+    }
+
+    // 全选/取消全选
+    function selectAllInstances() {
+        const checkboxes = document.querySelectorAll('.instance-checkbox');
+        checkboxes.forEach(checkbox => {
+            selectedInstances.add(checkbox.value);
+            checkbox.checked = true;
+        });
+        
+        updateSelectedCount();
+        updateSelectAllCheckbox();
+        
+        // 更新卡片样式
+        if (currentView === 'card') {
+            document.querySelectorAll('.instance-card').forEach(card => {
+                card.classList.add('border-primary');
+            });
+        } else {
+            document.querySelectorAll('#instancesTableBody tr').forEach(row => {
+                row.classList.add('table-active');
+            });
+        }
+    }
+
+    // 清除选择
+    function clearSelection() {
+        selectedInstances.clear();
+        
+        // 取消所有复选框选中状态
+        document.querySelectorAll('.instance-checkbox').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // 移除卡片高亮
+        document.querySelectorAll('.instance-card').forEach(card => {
+            card.classList.remove('border-primary');
+        });
+        
+        // 移除表格行高亮
+        document.querySelectorAll('#instancesTableBody tr').forEach(row => {
+            row.classList.remove('table-active');
+        });
+        
+        updateSelectedCount();
+        updateSelectAllCheckbox();
+    }
+
+    // 更新选中数量显示
+    function updateSelectedCount() {
+        document.getElementById('selectedCount').textContent = `已选择 ${selectedInstances.size} 个实例`;
+    }
+
+    // 更新全选复选框状态
+    function updateSelectAllCheckbox() {
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        if (!selectAllCheckbox) return;
+        
+        const checkboxes = document.querySelectorAll('.instance-checkbox');
+        
+        if (checkboxes.length === 0) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = false;
+            return;
+        }
+        
+        const checkedCount = selectedInstances.size;
+        
+        if (checkedCount === 0) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = false;
+        } else if (checkedCount === checkboxes.length) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = true;
+        } else {
+            selectAllCheckbox.indeterminate = true;
+        }
+    }
+
+    // 全选复选框切换
+    function toggleSelectAll() {
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        
+        if (selectAllCheckbox.checked) {
+            selectAllInstances();
+        } else {
+            clearSelection();
+        }
+    }
+
+    // 批量操作
+    async function batchAction(action) {
+        if (selectedInstances.size === 0) {
+            showAlert('请先选择要操作的实例', 'warning');
+            return;
+        }
+        
+        const instanceIds = Array.from(selectedInstances);
+        const actionNames = {
+            'start': '启动',
+            'stop': '停止',
+            'restart': '重启',
+            'delete': '删除'
+        };
+        
+        if (!confirm(`确定要${actionNames[action]} ${instanceIds.length} 个实例吗？`)) {
+            return;
+        }
+        
+        try {
+            showLoading(true);
+            
+            // 检查是否在"所有集群"模式
+            const select = document.getElementById('clusterSelect');
+            const isAllClusters = (select.value === '');
+            
+            let response;
+            if (isAllClusters) {
+                // 跨集群批量操作
+                response = await fetch(`/api/instances/batch-action-cross-cluster`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        instance_ids: instanceIds,
+                        action: action,
+                        restart_type: action === 'restart' ? 'soft' : undefined
+                    })
+                });
+            } else {
+                // 单集群批量操作
+                response = await fetch(`/api/instances/batch-action?cluster_id=${currentClusterId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        instance_ids: instanceIds,
+                        action: action,
+                        restart_type: action === 'restart' ? 'soft' : undefined
+                    })
+                });
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showBatchResults(data);
+                clearSelection();
+                
+                // 延迟刷新列表
+                setTimeout(() => {
+                    if (isAllClusters) {
+                        loadAllClustersInstances(currentPage);
+                    } else {
+                        loadInstances(currentPage);
+                    }
+                }, 2000);
+            } else {
+                showAlert('批量操作失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Batch operation error:', error);
+            showAlert('批量操作发生错误，请重试', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 显示批量操作结果
+    function showBatchResults(data) {
+        let resultHtml = `
+            <div class="alert alert-info">
+                <h6>操作汇总</h6>
+                <p>成功: ${data.success_count}/${data.total_count}</p>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>实例名称</th>
+                            <th>状态</th>
+                            <th>消息</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        data.results.forEach(result => {
+            const statusClass = result.success ? 'text-success' : 'text-danger';
+            const statusIcon = result.success ? 'fas fa-check' : 'fas fa-times';
+            const clusterInfo = result.cluster_name ? ` (${result.cluster_name})` : '';
+            resultHtml += `
+                <tr>
+                    <td>${result.instance_name}${clusterInfo}</td>
+                    <td><i class="${statusIcon} ${statusClass}"></i></td>
+                    <td class="${statusClass}">${result.success ? result.message : result.error}</td>
+                </tr>
+            `;
+        });
+        
+        resultHtml += '</tbody></table></div>';
+        
+        document.getElementById('batchResultContent').innerHTML = resultHtml;
+        new bootstrap.Modal(document.getElementById('batchResultModal')).show();
+    }
+
+    // 导出实例到Excel
+    async function exportInstances() {
+        if (!currentClusterId) {
+            showAlert('请先选择一个集群', 'warning');
+            return;
+        }
+        
+        try {
+            showLoading(true);
+            
+            const exportData = {
+                export_all: selectedInstances.size === 0,
+                instance_ids: selectedInstances.size > 0 ? Array.from(selectedInstances) : []
+            };
+            
+            const response = await fetch(`/api/instances/export?cluster_id=${currentClusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(exportData)
+            });
+            
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                
+                // 从响应头获取文件名
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'instances_export.xlsx';
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+                    if (filenameMatch) {
+                        filename = filenameMatch[1];
+                    }
+                }
+                
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                showAlert('Excel文件导出成功', 'success');
+            } else {
+                const data = await response.json();
+                showAlert('导出失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Export error:', error);
+            showAlert('导出失败，请重试', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 重命名实例
+    function renameInstance(instanceId, currentName) {
+        currentRenameInstance = { id: instanceId, name: currentName };
+        
+        document.getElementById('currentName').value = currentName;
+        document.getElementById('newName').value = '';
+        
+        new bootstrap.Modal(document.getElementById('renameModal')).show();
+    }
+
+    // 确认重命名
+    async function confirmRename() {
+        const newName = document.getElementById('newName').value.trim();
+        
+        if (!newName) {
+            showAlert('请输入新的实例名称', 'warning');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/instances/${currentRenameInstance.id}/rename?cluster_id=${currentClusterId}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: newName
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert(data.message, 'success');
+                bootstrap.Modal.getInstance(document.getElementById('renameModal')).hide();
+                loadInstances(currentPage);
+            } else {
+                showAlert('重命名失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Rename error:', error);
+            showAlert('重命名失败，请重试', 'danger');
+        }
+    }
+
+    // 设置销毁时间
+    function setDestroyTimer(instanceId, instanceName) {
+        currentRenameInstance = { id: instanceId, name: instanceName };
+        
+        document.getElementById('destroyInstanceName').value = instanceName;
+        
+        // 设置默认时间为1小时后
+        const defaultTime = new Date();
+        defaultTime.setHours(defaultTime.getHours() + 1);
+        document.getElementById('destroyDateTime').value = defaultTime.toISOString().slice(0, 16);
+        
+        new bootstrap.Modal(document.getElementById('destroyTimerModal')).show();
+    }
+
+    // 确认设置销毁时间
+    async function confirmDestroyTimer() {
+        const destroyDateTime = document.getElementById('destroyDateTime').value;
+        
+        if (!destroyDateTime) {
+            showAlert('请选择销毁时间', 'warning');
+            return;
+        }
+        
+        // 检查时间是否在未来
+        const destroyDate = new Date(destroyDateTime);
+        if (destroyDate <= new Date()) {
+            showAlert('销毁时间必须是未来时间', 'warning');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/instances/${currentRenameInstance.id}/destroy-timer?cluster_id=${currentClusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    destroy_at: destroyDate.toISOString()
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert(data.message, 'success');
+                bootstrap.Modal.getInstance(document.getElementById('destroyTimerModal')).hide();
+                loadInstances(currentPage);
+            } else {
+                showAlert('设置销毁时间失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Destroy timer error:', error);
+            showAlert('设置销毁时间失败，请重试', 'danger');
+        }
+    }
+</script>
+{% endblock %}

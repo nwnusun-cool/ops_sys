@@ -1,0 +1,776 @@
+{% extends "base.html" %}
+
+{% block title %}创建实例 - {{ super() }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-section {
+        margin-bottom: 2rem;
+        padding: 1.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+        background-color: #f8f9fa;
+    }
+    .form-section h5 {
+        color: #495057;
+        border-bottom: 2px solid #007bff;
+        padding-bottom: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .required {
+        color: #dc3545;
+    }
+    .flavor-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .flavor-card:hover {
+        border-color: #007bff;
+        background-color: #f0f8ff;
+    }
+    .flavor-card.selected {
+        border-color: #007bff;
+        background-color: #e7f3ff;
+        box-shadow: 0 2px 4px rgba(0,123,255,0.25);
+    }
+    .image-card {
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    .image-card:hover {
+        border-color: #28a745;
+        background-color: #f0fff4;
+    }
+    .image-card.selected {
+        border-color: #28a745;
+        background-color: #e7f6e7;
+        box-shadow: 0 2px 4px rgba(40,167,69,0.25);
+    }
+    .network-item {
+        padding: 0.5rem;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        margin-bottom: 0.5rem;
+    }
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255,255,255,0.8);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+    }
+    .btn-create {
+        font-size: 1.1rem;
+        padding: 0.75rem 2rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-plus-circle me-2 text-success"></i>创建实例
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <a href="{{ url_for('main.instances') }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-1"></i>返回实例列表
+        </a>
+    </div>
+</div>
+
+<!-- 加载指示器 -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="text-center">
+        <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+            <span class="visually-hidden">加载中...</span>
+        </div>
+        <h5>正在创建实例...</h5>
+        <p class="text-muted">请稍候，这可能需要几分钟时间</p>
+    </div>
+</div>
+
+<!-- 集群选择 -->
+<div class="form-section">
+    <h5><i class="fas fa-server me-2"></i>选择集群 <span class="required">*</span></h5>
+    <div class="row">
+        <div class="col-md-6">
+            <select class="form-select" id="clusterSelect" onchange="onClusterChange()" required>
+                <option value="">请选择OpenStack集群...</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- 创建表单 -->
+<form id="createForm" style="display: none;">
+    <!-- 基本配置 -->
+    <div class="form-section">
+        <h5><i class="fas fa-cog me-2"></i>基本配置</h5>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="form-label">实例名称 <span class="required">*</span></label>
+                    <input type="text" class="form-control" id="instanceName" required 
+                           placeholder="输入实例名称" maxlength="255">
+                    <div class="form-text">只能包含字母、数字、下划线和连字符</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="form-label">创建数量</label>
+                    <input type="number" class="form-control" id="instanceCount" 
+                           value="1" min="1" max="10">
+                    <div class="form-text">同时创建的实例数量（1-10）</div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <div class="mb-3">
+                    <label class="form-label">描述</label>
+                    <textarea class="form-control" id="instanceDescription" rows="2" 
+                              placeholder="可选：描述此实例的用途"></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 镜像选择 -->
+    <div class="form-section">
+        <h5><i class="fas fa-compact-disc me-2"></i>选择镜像 <span class="required">*</span></h5>
+        <div class="mb-3">
+            <input type="text" class="form-control" id="imageSearch" 
+                   placeholder="搜索镜像名称..." onkeyup="filterImages()">
+        </div>
+        <div class="row" id="imagesList">
+            <!-- 镜像列表将通过JavaScript动态加载 -->
+        </div>
+        <input type="hidden" id="selectedImageId" required>
+    </div>
+
+    <!-- 规格选择 -->
+    <div class="form-section">
+        <h5><i class="fas fa-microchip me-2"></i>选择规格 <span class="required">*</span></h5>
+        <div class="mb-3">
+            <input type="text" class="form-control" id="flavorSearch" 
+                   placeholder="搜索规格名称..." onkeyup="filterFlavors()">
+        </div>
+        <div class="row" id="flavorsList">
+            <!-- 规格列表将通过JavaScript动态加载 -->
+        </div>
+        <input type="hidden" id="selectedFlavorId" required>
+    </div>
+
+    <!-- 网络配置 -->
+    <div class="form-section">
+        <h5><i class="fas fa-network-wired me-2"></i>网络配置 <span class="required">*</span></h5>
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle me-2"></i>
+            至少选择一个网络，建议选择有外网访问的网络
+        </div>
+        <div id="networksList">
+            <!-- 网络列表将通过JavaScript动态加载 -->
+        </div>
+    </div>
+
+    <!-- 安全配置 -->
+    <div class="form-section">
+        <h5><i class="fas fa-shield-alt me-2"></i>安全配置</h5>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="form-label">密钥对</label>
+                    <select class="form-select" id="keypairSelect">
+                        <option value="">不使用密钥对</option>
+                    </select>
+                    <div class="form-text">用于SSH登录的密钥对</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="form-label">安全组</label>
+                    <select class="form-select" id="securityGroupSelect" multiple>
+                        <!-- 安全组列表将通过JavaScript动态加载 -->
+                    </select>
+                    <div class="form-text">控制网络访问的安全规则</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 高级配置 -->
+    <div class="form-section">
+        <h5><i class="fas fa-sliders-h me-2"></i>高级配置</h5>
+        <div class="row">
+            <div class="col-md-6">
+                <div class="mb-3">
+                    <label class="form-label">可用区</label>
+                    <select class="form-select" id="availabilityZoneSelect">
+                        <option value="">自动选择</option>
+                    </select>
+                    <div class="form-text">指定实例运行的可用区</div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col-md-12">
+                <div class="mb-3">
+                    <label class="form-label">用户数据</label>
+                    <textarea class="form-control" id="userData" rows="6" 
+                              placeholder="可选：实例启动时执行的脚本，如cloud-init配置"></textarea>
+                    <div class="form-text">支持cloud-init格式的初始化脚本</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="form-section">
+        <div class="d-flex justify-content-between">
+            <button type="button" class="btn btn-secondary" onclick="resetForm()">
+                <i class="fas fa-undo me-1"></i>重置表单
+            </button>
+            <div>
+                <button type="button" class="btn btn-outline-primary me-2" onclick="previewInstance()">
+                    <i class="fas fa-eye me-1"></i>预览配置
+                </button>
+                <button type="submit" class="btn btn-success btn-create">
+                    <i class="fas fa-rocket me-1"></i>创建实例
+                </button>
+            </div>
+        </div>
+    </div>
+</form>
+
+<!-- 预览配置模态框 -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-eye me-2"></i>实例配置预览
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="previewContent">
+                    <!-- 预览内容将通过JavaScript填充 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                <button type="button" class="btn btn-success" onclick="submitForm()" data-bs-dismiss="modal">
+                    <i class="fas fa-rocket me-1"></i>确认创建
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentClusterId = null;
+    let createData = null;
+    let selectedImageId = null;
+    let selectedFlavorId = null;
+    let selectedNetworks = [];
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        loadClusters();
+        
+        // 绑定表单提交事件
+        document.getElementById('createForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            previewInstance();
+        });
+    });
+    
+    // 加载集群列表
+    async function loadClusters() {
+        try {
+            const response = await fetch('/api/clusters');
+            const data = await response.json();
+            
+            if (data.success) {
+                const select = document.getElementById('clusterSelect');
+                select.innerHTML = '<option value="">请选择OpenStack集群...</option>';
+                
+                data.data.forEach(cluster => {
+                    const option = document.createElement('option');
+                    option.value = cluster.id;
+                    option.textContent = `${cluster.name} (${cluster.connection_status})`;
+                    if (cluster.connection_status !== 'connected') {
+                        option.disabled = true;
+                        option.textContent += ' - 连接失败';
+                    }
+                    select.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading clusters:', error);
+            showAlert('加载集群列表失败', 'danger');
+        }
+    }
+    
+    // 集群选择变化
+    async function onClusterChange() {
+        const select = document.getElementById('clusterSelect');
+        currentClusterId = select.value ? parseInt(select.value) : null;
+        
+        if (currentClusterId) {
+            document.getElementById('createForm').style.display = 'block';
+            await loadCreateData();
+        } else {
+            document.getElementById('createForm').style.display = 'none';
+        }
+    }
+    
+    // 加载创建实例所需数据
+    async function loadCreateData() {
+        if (!currentClusterId) return;
+        
+        try {
+            showLoading(true);
+            
+            const response = await fetch(`/api/instances/create-data?cluster_id=${currentClusterId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                createData = data.data;
+                renderImages(createData.images);
+                renderFlavors(createData.flavors);
+                renderNetworks(createData.networks);
+                renderKeypairs(createData.keypairs);
+                renderSecurityGroups(createData.security_groups);
+                renderAvailabilityZones(createData.availability_zones);
+                
+                showAlert(`已加载 ${createData.cluster_name} 集群的配置数据`, 'success');
+            } else {
+                showAlert('加载配置数据失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading create data:', error);
+            showAlert('网络错误，请重试', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+    
+    // 渲染镜像列表
+    function renderImages(images) {
+        const container = document.getElementById('imagesList');
+        container.innerHTML = '';
+        
+        if (images.length === 0) {
+            container.innerHTML = '<div class="col-12"><div class="alert alert-warning">没有可用的镜像</div></div>';
+            return;
+        }
+        
+        images.forEach(image => {
+            const div = document.createElement('div');
+            div.className = 'col-md-6 mb-3';
+            div.innerHTML = `
+                <div class="image-card" data-image-id="${image.id}" onclick="selectImage('${image.id}')">
+                    <h6>${image.name}</h6>
+                    <div class="small text-muted">
+                        <div>格式: ${image.disk_format}</div>
+                        <div>大小: ${formatSize(image.size)}</div>
+                        <div>最小内存: ${image.min_ram} MB</div>
+                        <div>最小磁盘: ${image.min_disk} GB</div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+    
+    // 渲染规格列表
+    function renderFlavors(flavors) {
+        const container = document.getElementById('flavorsList');
+        container.innerHTML = '';
+        
+        if (flavors.length === 0) {
+            container.innerHTML = '<div class="col-12"><div class="alert alert-warning">没有可用的规格</div></div>';
+            return;
+        }
+        
+        flavors.forEach(flavor => {
+            const div = document.createElement('div');
+            div.className = 'col-md-6 mb-3';
+            div.innerHTML = `
+                <div class="flavor-card" data-flavor-id="${flavor.id}" onclick="selectFlavor('${flavor.id}')">
+                    <h6>${flavor.name}</h6>
+                    <div class="row">
+                        <div class="col-6">
+                            <small class="text-muted">
+                                <i class="fas fa-microchip me-1"></i>vCPU: ${flavor.vcpus}
+                            </small>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">
+                                <i class="fas fa-memory me-1"></i>内存: ${flavor.ram} MB
+                            </small>
+                        </div>
+                    </div>
+                    <div class="row mt-1">
+                        <div class="col-6">
+                            <small class="text-muted">
+                                <i class="fas fa-hdd me-1"></i>磁盘: ${flavor.disk} GB
+                            </small>
+                        </div>
+                        <div class="col-6">
+                            <small class="text-muted">
+                                <i class="fas fa-exchange-alt me-1"></i>交换: ${flavor.swap} GB
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+    
+    // 渲染网络列表
+    function renderNetworks(networks) {
+        const container = document.getElementById('networksList');
+        container.innerHTML = '';
+        
+        if (networks.length === 0) {
+            container.innerHTML = '<div class="alert alert-warning">没有可用的网络</div>';
+            return;
+        }
+        
+        networks.forEach(network => {
+            const div = document.createElement('div');
+            div.className = 'network-item';
+            
+            const subnetsInfo = network.subnets.map(subnet => 
+                `${subnet.name} (${subnet.cidr})`
+            ).join(', ') || '无子网';
+            
+            div.innerHTML = `
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="${network.id}" 
+                           id="network_${network.id}" onchange="toggleNetwork('${network.id}')">
+                    <label class="form-check-label" for="network_${network.id}">
+                        <strong>${network.name}</strong>
+                        ${network.external ? '<span class="badge bg-info ms-1">外网</span>' : ''}
+                        ${network.shared ? '<span class="badge bg-secondary ms-1">共享</span>' : ''}
+                        <div class="small text-muted mt-1">
+                            子网: ${subnetsInfo}
+                        </div>
+                    </label>
+                </div>
+            `;
+            container.appendChild(div);
+        });
+    }
+    
+    // 渲染密钥对列表
+    function renderKeypairs(keypairs) {
+        const select = document.getElementById('keypairSelect');
+        select.innerHTML = '<option value="">不使用密钥对</option>';
+        
+        keypairs.forEach(kp => {
+            const option = document.createElement('option');
+            option.value = kp.name;
+            option.textContent = `${kp.name} (${kp.type})`;
+            select.appendChild(option);
+        });
+    }
+    
+    // 渲染安全组列表
+    function renderSecurityGroups(securityGroups) {
+        const select = document.getElementById('securityGroupSelect');
+        select.innerHTML = '';
+        
+        securityGroups.forEach(sg => {
+            const option = document.createElement('option');
+            option.value = sg.name;
+            option.textContent = `${sg.name} (${sg.rules_count} 规则)`;
+            if (sg.name === 'default') {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+    }
+    
+    // 渲染可用区列表
+    function renderAvailabilityZones(zones) {
+        const select = document.getElementById('availabilityZoneSelect');
+        select.innerHTML = '<option value="">自动选择</option>';
+        
+        zones.forEach(zone => {
+            const option = document.createElement('option');
+            option.value = zone.name;
+            option.textContent = zone.name;
+            select.appendChild(option);
+        });
+    }
+    
+    // 选择镜像
+    function selectImage(imageId) {
+        // 移除之前的选择
+        document.querySelectorAll('.image-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        
+        // 添加新选择
+        document.querySelector(`[data-image-id="${imageId}"]`).classList.add('selected');
+        selectedImageId = imageId;
+        document.getElementById('selectedImageId').value = imageId;
+    }
+    
+    // 选择规格
+    function selectFlavor(flavorId) {
+        // 移除之前的选择
+        document.querySelectorAll('.flavor-card').forEach(card => {
+            card.classList.remove('selected');
+        });
+        
+        // 添加新选择
+        document.querySelector(`[data-flavor-id="${flavorId}"]`).classList.add('selected');
+        selectedFlavorId = flavorId;
+        document.getElementById('selectedFlavorId').value = flavorId;
+    }
+    
+    // 切换网络选择
+    function toggleNetwork(networkId) {
+        const checkbox = document.getElementById(`network_${networkId}`);
+        if (checkbox.checked) {
+            selectedNetworks.push(networkId);
+        } else {
+            selectedNetworks = selectedNetworks.filter(id => id !== networkId);
+        }
+    }
+    
+    // 过滤镜像
+    function filterImages() {
+        const searchTerm = document.getElementById('imageSearch').value.toLowerCase();
+        const imageCards = document.querySelectorAll('.image-card');
+        
+        imageCards.forEach(card => {
+            const imageName = card.querySelector('h6').textContent.toLowerCase();
+            const container = card.closest('.col-md-6');
+            if (imageName.includes(searchTerm)) {
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
+        });
+    }
+    
+    // 过滤规格
+    function filterFlavors() {
+        const searchTerm = document.getElementById('flavorSearch').value.toLowerCase();
+        const flavorCards = document.querySelectorAll('.flavor-card');
+        
+        flavorCards.forEach(card => {
+            const flavorName = card.querySelector('h6').textContent.toLowerCase();
+            const container = card.closest('.col-md-6');
+            if (flavorName.includes(searchTerm)) {
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+            }
+        });
+    }
+    
+    // 预览实例配置
+    function previewInstance() {
+        // 验证必填字段
+        if (!currentClusterId) {
+            showAlert('请选择集群', 'warning');
+            return;
+        }
+        
+        const instanceName = document.getElementById('instanceName').value.trim();
+        if (!instanceName) {
+            showAlert('请输入实例名称', 'warning');
+            return;
+        }
+        
+        if (!selectedImageId) {
+            showAlert('请选择镜像', 'warning');
+            return;
+        }
+        
+        if (!selectedFlavorId) {
+            showAlert('请选择规格', 'warning');
+            return;
+        }
+        
+        if (selectedNetworks.length === 0) {
+            showAlert('请至少选择一个网络', 'warning');
+            return;
+        }
+        
+        // 生成预览内容
+        const selectedImage = createData.images.find(img => img.id === selectedImageId);
+        const selectedFlavor = createData.flavors.find(flavor => flavor.id === selectedFlavorId);
+        const selectedNetworksList = selectedNetworks.map(netId => {
+            const network = createData.networks.find(net => net.id === netId);
+            return network ? network.name : netId;
+        });
+        
+        const keypair = document.getElementById('keypairSelect').value;
+        const securityGroups = Array.from(document.getElementById('securityGroupSelect').selectedOptions)
+            .map(option => option.value);
+        const availabilityZone = document.getElementById('availabilityZoneSelect').value;
+        const instanceCount = document.getElementById('instanceCount').value;
+        const description = document.getElementById('instanceDescription').value.trim();
+        
+        const previewHtml = `
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <tr><td><strong>集群</strong></td><td>${createData.cluster_name}</td></tr>
+                    <tr><td><strong>实例名称</strong></td><td>${instanceName}</td></tr>
+                    <tr><td><strong>创建数量</strong></td><td>${instanceCount}</td></tr>
+                    ${description ? `<tr><td><strong>描述</strong></td><td>${description}</td></tr>` : ''}
+                    <tr><td><strong>镜像</strong></td><td>${selectedImage.name}</td></tr>
+                    <tr><td><strong>规格</strong></td><td>${selectedFlavor.name} (${selectedFlavor.vcpus}vCPU, ${selectedFlavor.ram}MB内存, ${selectedFlavor.disk}GB磁盘)</td></tr>
+                    <tr><td><strong>网络</strong></td><td>${selectedNetworksList.join(', ')}</td></tr>
+                    ${keypair ? `<tr><td><strong>密钥对</strong></td><td>${keypair}</td></tr>` : ''}
+                    ${securityGroups.length > 0 ? `<tr><td><strong>安全组</strong></td><td>${securityGroups.join(', ')}</td></tr>` : ''}
+                    ${availabilityZone ? `<tr><td><strong>可用区</strong></td><td>${availabilityZone}</td></tr>` : ''}
+                </table>
+            </div>
+        `;
+        
+        document.getElementById('previewContent').innerHTML = previewHtml;
+        new bootstrap.Modal(document.getElementById('previewModal')).show();
+    }
+    
+    // 提交表单
+    async function submitForm() {
+        const formData = {
+            name: document.getElementById('instanceName').value.trim(),
+            image_id: selectedImageId,
+            flavor_id: selectedFlavorId,
+            networks: selectedNetworks,
+            count: parseInt(document.getElementById('instanceCount').value),
+            description: document.getElementById('instanceDescription').value.trim(),
+            key_name: document.getElementById('keypairSelect').value || null,
+            security_groups: Array.from(document.getElementById('securityGroupSelect').selectedOptions)
+                .map(option => option.value),
+            availability_zone: document.getElementById('availabilityZoneSelect').value || null,
+            user_data: document.getElementById('userData').value.trim() || null
+        };
+        
+        try {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+            
+            const response = await fetch(`/api/instances/create?cluster_id=${currentClusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert(data.message, 'success');
+                
+                // 3秒后跳转到实例列表
+                setTimeout(() => {
+                    window.location.href = '/instances';
+                }, 3000);
+            } else {
+                showAlert('创建实例失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Create instance error:', error);
+            showAlert('创建实例失败，请重试', 'danger');
+        } finally {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+    }
+    
+    // 重置表单
+    function resetForm() {
+        if (confirm('确定要重置表单吗？所有输入的信息将被清除。')) {
+            document.getElementById('createForm').reset();
+            selectedImageId = null;
+            selectedFlavorId = null;
+            selectedNetworks = [];
+            
+            // 重置选择状态
+            document.querySelectorAll('.image-card, .flavor-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // 重置网络选择
+            document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            
+            showAlert('表单已重置', 'info');
+        }
+    }
+    
+    // 显示/隐藏加载状态
+    function showLoading(show) {
+        if (show) {
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        } else {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+    }
+    
+    // 格式化文件大小
+    function formatSize(bytes) {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+    
+    // 显示提示信息
+    function showAlert(message, type) {
+        // 移除现有的alert
+        const existingAlerts = document.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => {
+            if (alert.classList.contains('alert-dismissible')) {
+                alert.remove();
+            }
+        });
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const content = document.querySelector('main');
+        content.insertBefore(alertDiv, content.firstChild);
+        
+        // 自动删除
+        if (type !== 'info') {
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+    }
+</script>
+{% endblock %}
