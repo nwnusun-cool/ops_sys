@@ -1,0 +1,316 @@
+{% extends "base.html" %}
+
+{% block title %}路由管理 - {{ super() }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .stats-card {
+        border-left: 4px solid #007bff;
+        transition: all 0.3s ease;
+    }
+    .stats-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .router-status {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin-right: 5px;
+    }
+    .router-status.ACTIVE { background-color: #28a745; }
+    .router-status.DOWN { background-color: #dc3545; }
+    .router-status.BUILD { background-color: #ffc107; }
+    .table-hover tbody tr:hover {
+        background-color: #f8f9fa;
+    }
+    .action-buttons .btn {
+        margin: 2px;
+    }
+    .filter-card {
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .batch-actions {
+        display: none;
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 1000;
+        border: 1px solid #dee2e6;
+    }
+    .loading-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.8);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- 加载覆盖层 -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">加载中...</span>
+    </div>
+</div>
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-route me-2"></i>路由管理
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-outline-secondary" onclick="refreshRouters()">
+                <i class="fas fa-sync-alt me-1"></i>刷新
+            </button>
+        </div>
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-outline-primary" onclick="showCreateModal()">
+                <i class="fas fa-plus me-1"></i>创建路由器
+            </button>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-info" onclick="exportRouters()">
+                <i class="fas fa-download me-1"></i>导出
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4" id="statsCards">
+    <div class="col-md-3">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <h5 class="card-title text-primary">总路由器</h5>
+                <h2 class="text-primary" id="totalRouters">-</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <h5 class="card-title text-success">运行中</h5>
+                <h2 class="text-success" id="activeRouters">-</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <h5 class="card-title text-danger">停止</h5>
+                <h2 class="text-danger" id="downRouters">-</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stats-card">
+            <div class="card-body text-center">
+                <h5 class="card-title text-info">当前集群</h5>
+                <h6 class="text-info" id="currentCluster">-</h6>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 过滤和搜索 -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card filter-card">
+            <div class="card-body">
+                <form id="filterForm" class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">集群</label>
+                        <select class="form-select" id="clusterSelect" name="cluster_id" onchange="onClusterChange()">
+                            <option value="">加载中...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">状态</label>
+                        <select class="form-select" id="statusFilter" name="status">
+                            <option value="">全部状态</option>
+                            <option value="ACTIVE">运行中</option>
+                            <option value="DOWN">停止</option>
+                            <option value="ERROR">错误</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">搜索</label>
+                        <input type="text" class="form-control" id="searchInput" name="search" placeholder="路由器名称或ID">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">每页显示</label>
+                        <select class="form-select" id="perPageSelect" name="per_page">
+                            <option value="20">20</option>
+                            <option value="50">50</option>
+                            <option value="100">100</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="button" class="btn btn-primary w-100" onclick="applyFilters()">
+                            <i class="fas fa-search me-1"></i>搜索
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 路由器列表 -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">路由器列表</h5>
+        <div class="d-flex align-items-center">
+            <div class="form-check me-3">
+                <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                <label class="form-check-label" for="selectAll">全选</label>
+            </div>
+            <small class="text-muted" id="selectedCount">已选择: 0</small>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th width="50px">
+                            <input type="checkbox" class="form-check-input" id="headerCheckbox">
+                        </th>
+                        <th>名称</th>
+                        <th>状态</th>
+                        <th>外部网关</th>
+                        <th>管理状态</th>
+                        <th>端口数</th>
+                        <th>集群</th>
+                        <th>创建时间</th>
+                        <th width="200px">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="routersTableBody">
+                    <tr>
+                        <td colspan="9" class="text-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 分页 -->
+<nav aria-label="路由器分页" class="mt-4">
+    <div class="d-flex justify-content-between align-items-center">
+        <div class="text-muted" id="paginationInfo">
+            显示 0 - 0 条，共 0 条记录
+        </div>
+        <ul class="pagination mb-0" id="pagination">
+            <!-- 分页按钮将通过JavaScript生成 -->
+        </ul>
+    </div>
+</nav>
+
+<!-- 批量操作面板 -->
+<div class="batch-actions" id="batchActions">
+    <div class="d-flex align-items-center gap-2">
+        <span class="me-3">批量操作:</span>
+        <button type="button" class="btn btn-sm btn-success" onclick="batchAction('enable')">
+            <i class="fas fa-play me-1"></i>启用
+        </button>
+        <button type="button" class="btn btn-sm btn-warning" onclick="batchAction('disable')">
+            <i class="fas fa-pause me-1"></i>禁用
+        </button>
+        <button type="button" class="btn btn-sm btn-danger" onclick="batchAction('delete')">
+            <i class="fas fa-trash me-1"></i>删除
+        </button>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="clearSelection()">
+            <i class="fas fa-times me-1"></i>取消
+        </button>
+    </div>
+</div>
+
+<!-- 模态框区域 -->
+<div id="modalArea">
+    <!-- 路由器详情模态框 -->
+    <div class="modal fade" id="routerDetailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">路由器详情</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="routerDetailContent">
+                    <!-- 内容将通过JavaScript加载 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建路由器模态框 -->
+    <div class="modal fade" id="createRouterModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">创建路由器</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form id="createRouterForm">
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">路由器名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">描述</label>
+                            <textarea class="form-control" name="description" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">外部网络</label>
+                            <select class="form-select" name="external_network_id" id="externalNetworkSelect">
+                                <option value="">不设置外部网关</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" name="admin_state_up" checked>
+                            <label class="form-check-label">启用管理状态</label>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" name="distributed">
+                            <label class="form-check-label">分布式路由器</label>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" name="ha">
+                            <label class="form-check-label">高可用性</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="submit" class="btn btn-primary">创建路由器</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/routers.js') }}"></script>
+{% endblock %}

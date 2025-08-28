@@ -1,0 +1,1605 @@
+{% extends "base.html" %}
+
+{% block title %}卷管理 - {{ super() }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .volume-card {
+        transition: transform 0.2s;
+        border-left: 4px solid #dee2e6;
+    }
+    .volume-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .volume-card.status-available {
+        border-left-color: #28a745;
+    }
+    .volume-card.status-in-use {
+        border-left-color: #007bff;
+    }
+    .volume-card.status-error {
+        border-left-color: #dc3545;
+    }
+    .volume-card.status-creating {
+        border-left-color: #ffc107;
+    }
+    .status-badge {
+        font-size: 0.8rem;
+        padding: 0.25em 0.5em;
+    }
+    .volume-actions {
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    .volume-card:hover .volume-actions {
+        opacity: 1;
+    }
+    .stats-overview {
+        margin-bottom: 2rem;
+    }
+    .loading-spinner {
+        display: none;
+    }
+    .filter-section {
+        background: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-hdd me-2"></i>卷管理
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-success" onclick="showCreateVolumeModal()">
+                <i class="fas fa-plus me-1"></i>创建卷
+            </button>
+        </div>
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-outline-secondary" onclick="refreshVolumes()">
+                <i class="fas fa-sync-alt me-1"></i>刷新
+            </button>
+        </div>
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-outline-primary" id="batchOperationBtn" onclick="toggleBatchMode()" style="display: none;">
+                <i class="fas fa-tasks me-1"></i>批量操作
+            </button>
+            <button type="button" class="btn btn-success" id="exportBtn" onclick="exportVolumes()" style="display: none;">
+                <i class="fas fa-download me-1"></i>导出Excel
+            </button>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-secondary" id="viewToggle" onclick="toggleView()" title="切换视图">
+                <i class="fas fa-th me-1"></i>卡片视图
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 加载指示器 -->
+<div id="loadingIndicator" class="text-center py-4 loading-spinner">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">加载中...</span>
+    </div>
+    <p class="mt-2 text-muted">正在加载卷信息...</p>
+</div>
+
+<!-- 集群选择和统计概览 -->
+<div class="stats-overview">
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <label class="form-label">选择集群</label>
+                    <select class="form-select" id="clusterSelect" onchange="onClusterChange()">
+                        <option value="">加载中...</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">总卷数</h5>
+                    <h2 class="mb-0" id="totalVolumes">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">可用</h5>
+                    <h2 class="mb-0" id="availableVolumes">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">使用中</h5>
+                    <h2 class="mb-0" id="inUseVolumes">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 批量操作工具栏 -->
+<div class="alert alert-info" id="batchToolbar" style="display: none;">
+    <div class="row align-items-center">
+        <div class="col-md-6">
+            <span id="selectedCount">已选择 0 个卷</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-2" onclick="selectAllVolumes()">
+                <i class="fas fa-check-square me-1"></i>全选
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="clearSelection()">
+                <i class="fas fa-square me-1"></i>取消选择
+            </button>
+        </div>
+        <div class="col-md-6 text-end">
+            <div class="btn-group">
+                <button type="button" class="btn btn-sm btn-info" onclick="batchAction('detach')">
+                    <i class="fas fa-unlink me-1"></i>批量卸载
+                </button>
+                <button type="button" class="btn btn-sm btn-danger" onclick="batchAction('delete')">
+                    <i class="fas fa-trash me-1"></i>批量删除
+                </button>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary ms-2" onclick="toggleBatchMode()">
+                <i class="fas fa-times me-1"></i>退出批量模式
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 过滤器 -->
+<div class="filter-section" id="filterSection" style="display: none;">
+    <div class="row">
+        <div class="col-md-3">
+            <label class="form-label">状态过滤</label>
+            <select class="form-select" id="statusFilter" onchange="applyFilters()">
+                <option value="">所有状态</option>
+                <option value="available">可用</option>
+                <option value="in-use">使用中</option>
+                <option value="creating">创建中</option>
+                <option value="error">错误</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">卷类型</label>
+            <select class="form-select" id="volumeTypeFilter" onchange="applyFilters()">
+                <option value="">所有类型</option>
+                <option value="__DEFAULT__">默认类型</option>
+                <option value="ssd">SSD</option>
+                <option value="hdd">HDD</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">搜索</label>
+            <input type="text" class="form-control" id="searchInput" placeholder="卷名称或ID..." onkeyup="debounceSearch()">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">每页显示</label>
+            <select class="form-select" id="perPageSelect" onchange="applyFilters()">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- 卷列表 -->
+<div class="card" id="volumesCard" style="display: none;">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-list me-2"></i>卷列表
+            <span class="badge bg-secondary ms-2" id="volumeCount">0</span>
+        </h5>
+    </div>
+    <div class="card-body">
+        <!-- 卡片视图 -->
+        <div id="cardView">
+            <div id="volumesContainer" class="row">
+                <!-- 卷卡片将通过JavaScript动态加载 -->
+            </div>
+        </div>
+        
+        <!-- 表格视图 -->
+        <div id="tableView" style="display: none;">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th width="40" id="batchSelectHeader" style="display: none;">
+                                <input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll()">
+                            </th>
+                            <th>名称</th>
+                            <th>状态</th>
+                            <th>大小</th>
+                            <th>类型</th>
+                            <th>集群</th>
+                            <th>挂载状态</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="volumesTableBody">
+                        <!-- 表格行将通过JavaScript动态加载 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div id="emptyState" class="text-center py-5 text-muted" style="display: none;">
+            <i class="fas fa-hdd fa-3x mb-3"></i>
+            <h5>没有找到卷</h5>
+            <p>选择一个集群开始管理卷</p>
+        </div>
+    </div>
+</div>
+
+<!-- 分页 -->
+<nav class="mt-4" id="paginationContainer" style="display: none;">
+    <ul class="pagination justify-content-center" id="pagination">
+    </ul>
+</nav>
+
+<!-- 创建卷模态框 -->
+<div class="modal fade" id="createVolumeModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-plus me-2"></i>创建卷
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="createVolumeForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">卷名称 *</label>
+                                <input type="text" class="form-control" id="volumeName" required placeholder="请输入卷名称">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">大小 (GB) *</label>
+                                <input type="number" class="form-control" id="volumeSize" required min="1" placeholder="卷大小">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" id="volumeDescription" rows="2" placeholder="卷描述（可选）"></textarea>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">卷类型</label>
+                                <select class="form-select" id="volumeType">
+                                    <option value="">默认类型</option>
+                                    <!-- 动态加载 -->
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">可用区</label>
+                                <select class="form-select" id="availabilityZone">
+                                    <option value="">默认可用区</option>
+                                    <!-- 动态加载 -->
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-success" onclick="createVolume()">创建卷</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 卷详情模态框 -->
+<div class="modal fade" id="volumeDetailModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-hdd me-2"></i>卷详情
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="volumeDetailContent">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 操作确认模态框 -->
+<div class="modal fade" id="actionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>确认操作
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p id="actionMessage">您确定要执行此操作吗？</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmActionBtn" onclick="confirmAction()">确认</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 扩展卷模态框 -->
+<div class="modal fade" id="extendVolumeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-expand-arrows-alt me-2"></i>扩展卷
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="extendVolumeForm">
+                    <div class="mb-3">
+                        <label class="form-label">卷名称</label>
+                        <input type="text" class="form-control" id="extendVolumeName" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">当前大小</label>
+                        <input type="text" class="form-control" id="extendCurrentSize" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">新大小 (GB) *</label>
+                        <input type="number" class="form-control" id="extendNewSize" required min="1" placeholder="新的卷大小">
+                        <div class="form-text">注意：只能增加卷的大小，不能缩小</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-warning" onclick="confirmExtendVolume()">扩展卷</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 批量操作结果模态框 -->
+<div class="modal fade" id="batchResultModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-tasks me-2"></i>批量操作结果
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="batchResultContent">
+                    <!-- 结果内容将通过JavaScript填充 -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentClusterId = null;
+    let currentPage = 1;
+    let isLoading = false;
+    let pendingAction = null;
+    let currentExtendVolume = null;
+    let selectedVolumes = new Set();
+    let isBatchMode = false;
+    let currentView = 'card'; // 'card' or 'table'
+    let searchTimeout = null;
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, attempting to load clusters...');
+        loadClusters();
+    });
+
+    // 加载集群列表
+    async function loadClusters() {
+        try {
+            console.log('Loading clusters...');
+            const response = await fetch('/api/clusters');
+            console.log('Response status:', response.status);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('Response data:', data);
+            
+            if (data.success) {
+                const select = document.getElementById('clusterSelect');
+                console.log('ClusterSelect element:', select);
+                if (!select) {
+                    console.error('clusterSelect element not found!');
+                    return;
+                }
+                select.innerHTML = '<option value="">所有集群</option>';
+                console.log('Setting clusters data, length:', data.data.length);
+                
+                let firstConnectedCluster = null;
+                
+                data.data.forEach(cluster => {
+                    const option = document.createElement('option');
+                    option.value = cluster.id;
+                    option.textContent = `${cluster.name} (${cluster.connection_status})`;
+                    if (cluster.connection_status !== 'connected') {
+                        option.disabled = true;
+                        option.textContent += ' - 连接失败';
+                    } else if (!firstConnectedCluster) {
+                        firstConnectedCluster = cluster;
+                    }
+                    select.appendChild(option);
+                });
+                
+                // 自动选择第一个可用集群
+                if (firstConnectedCluster) {
+                    select.value = firstConnectedCluster.id;
+                    currentClusterId = firstConnectedCluster.id;
+                    onClusterChange();
+                }
+            } else {
+                console.error('API response not successful:', data);
+                showAlert('加载集群失败: ' + (data.error || '未知错误'), 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading clusters:', error);
+            console.error('Full error details:', error);
+            showAlert('加载集群列表失败: ' + error.message, 'danger');
+        }
+    }
+
+    // 集群选择变化
+    function onClusterChange() {
+        const select = document.getElementById('clusterSelect');
+        const selectedValue = select.value;
+        currentClusterId = selectedValue ? parseInt(selectedValue) : null;
+        
+        console.log('Cluster changed to:', currentClusterId);
+        
+        // 显示相关界面元素
+        document.getElementById('filterSection').style.display = 'block';
+        document.getElementById('volumesCard').style.display = 'block';
+        document.getElementById('batchOperationBtn').style.display = 'inline-block';
+        document.getElementById('exportBtn').style.display = 'inline-block';
+        currentPage = 1;
+        
+        if (selectedValue === '') {
+            // 选择"所有集群"
+            loadAllClustersVolumes();
+        } else {
+            // 选择特定集群
+            loadVolumes();
+        }
+    }
+
+    // 加载所有集群的卷列表
+    async function loadAllClustersVolumes(page = 1) {
+        if (isLoading) return;
+        
+        showLoading(true);
+        
+        try {
+            const params = new URLSearchParams({
+                page: page,
+                per_page: document.getElementById('perPageSelect').value
+            });
+            
+            // 添加过滤参数
+            const status = document.getElementById('statusFilter').value;
+            const search = document.getElementById('searchInput').value;
+            const volumeType = document.getElementById('volumeTypeFilter').value;
+            
+            if (status) params.append('status', status);
+            if (search) params.append('search', search);
+            if (volumeType) params.append('volume_type', volumeType);
+            
+            const response = await fetch(`/api/volumes/all-clusters?${params}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                renderVolumes(data.data);
+                renderPagination(data.pagination);
+                updateStats(data.statistics);
+                currentPage = page;
+            } else {
+                showAlert('加载卷失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading all cluster volumes:', error);
+            showAlert('网络错误，请检查连接', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 加载卷列表
+    async function loadVolumes(page = 1) {
+        if (!currentClusterId || isLoading) return;
+        
+        showLoading(true);
+        
+        try {
+            const params = new URLSearchParams({
+                cluster_id: currentClusterId,
+                page: page,
+                per_page: document.getElementById('perPageSelect').value
+            });
+            
+            // 添加过滤参数
+            const status = document.getElementById('statusFilter').value;
+            const search = document.getElementById('searchInput').value;
+            const volumeType = document.getElementById('volumeTypeFilter').value;
+            
+            if (status) params.append('status', status);
+            if (search) params.append('search', search);
+            if (volumeType) params.append('volume_type', volumeType);
+            
+            const response = await fetch(`/api/volumes?${params}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                renderVolumes(data.data);
+                renderPagination(data.pagination);
+                updateStats(data.statistics);
+                currentPage = page;
+            } else {
+                showAlert('加载卷失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading volumes:', error);
+            showAlert('网络错误，请检查连接', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 渲染卷列表
+    function renderVolumes(volumes) {
+        const emptyState = document.getElementById('emptyState');
+        const volumeCount = document.getElementById('volumeCount');
+        
+        volumeCount.textContent = volumes.length;
+        
+        if (volumes.length === 0) {
+            if (currentView === 'card') {
+                document.getElementById('volumesContainer').innerHTML = '';
+            } else {
+                document.getElementById('volumesTableBody').innerHTML = `<tr><td colspan="${isBatchMode ? '9' : '8'}" class="text-center text-muted">没有找到卷</td></tr>`;
+            }
+            emptyState.style.display = 'block';
+            document.getElementById('paginationContainer').style.display = 'none';
+            return;
+        }
+        
+        emptyState.style.display = 'none';
+        
+        if (currentView === 'table') {
+            renderVolumeTable(volumes);
+            return;
+        }
+        
+        // 卡片视图渲染
+        const container = document.getElementById('volumesContainer');
+        container.innerHTML = volumes.map(volume => `
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card volume-card status-${volume.status.toLowerCase()} ${selectedVolumes.has(volume.id) ? 'border-primary' : ''}" data-volume-id="${volume.id}">
+                    ${isBatchMode ? `
+                    <div class="card-header d-flex align-items-center">
+                        <input type="checkbox" class="form-check-input volume-checkbox me-2" value="${volume.id}" 
+                               ${selectedVolumes.has(volume.id) ? 'checked' : ''} 
+                               onchange="toggleVolumeSelection('${volume.id}')">
+                        <h6 class="mb-0 flex-grow-1">
+                            <i class="fas fa-hdd me-2"></i>
+                            ${volume.name}
+                        </h6>
+                        <div class="volume-actions">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="viewVolumeDetail('${volume.id}')">
+                                        <i class="fas fa-eye me-2"></i>查看详情
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    ${getVolumeActionMenuItems(volume)}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    ` : `
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">
+                            <i class="fas fa-hdd me-2"></i>
+                            ${volume.name}
+                        </h6>
+                        <div class="volume-actions">
+                            <div class="dropdown">
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="viewVolumeDetail('${volume.id}')">
+                                        <i class="fas fa-eye me-2"></i>查看详情
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    ${getVolumeActionMenuItems(volume)}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                    `}
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <span class="badge status-badge ${getVolumeStatusClass(volume.status)}">
+                                ${getVolumeStatusText(volume.status)}
+                            </span>
+                            <span class="badge bg-secondary ms-1">${volume.size}GB</span>
+                            <span class="badge bg-info ms-1">${volume.volume_type}</span>
+                            ${volume.cluster_name ? `<span class="badge bg-warning ms-1">${volume.cluster_name}</span>` : ''}
+                        </div>
+                        
+                        ${volume.description ? `
+                        <div class="mb-2">
+                            <small class="text-muted">
+                                <i class="fas fa-comment me-1"></i>
+                                ${volume.description}
+                            </small>
+                        </div>
+                        ` : ''}
+                        
+                        <div class="mb-2">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                挂载: ${getAttachmentStatus(volume.attachments)}
+                            </small>
+                        </div>
+                        
+                        <hr>
+                        <small class="text-muted">
+                            <i class="fas fa-clock me-1"></i>
+                            创建: ${formatTime(volume.created_at)}
+                        </small>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // 获取卷状态样式类
+    function getVolumeStatusClass(status) {
+        const classes = {
+            'available': 'bg-success',
+            'in-use': 'bg-primary',
+            'creating': 'bg-warning',
+            'deleting': 'bg-danger',
+            'error': 'bg-danger',
+            'error_deleting': 'bg-danger'
+        };
+        return classes[status] || 'bg-secondary';
+    }
+
+    // 获取卷状态文本
+    function getVolumeStatusText(status) {
+        const texts = {
+            'available': '可用',
+            'in-use': '使用中',
+            'creating': '创建中',
+            'deleting': '删除中',
+            'error': '错误',
+            'error_deleting': '删除错误'
+        };
+        return texts[status] || status;
+    }
+
+    // 获取挂载状态
+    function getAttachmentStatus(attachments) {
+        if (!attachments || attachments.length === 0) {
+            return '未挂载';
+        }
+        return `${attachments.length} 个挂载`;
+    }
+
+    // 获取卷操作菜单项
+    function getVolumeActionMenuItems(volume) {
+        const status = volume.status;
+        let items = [];
+        
+        if (status === 'available') {
+            items.push('<li><a class="dropdown-item" href="#" onclick="performVolumeAction(\'' + volume.id + '\', \'extend\', \'' + volume.name + '\')"><i class="fas fa-expand-arrows-alt me-2 text-warning"></i>扩展</a></li>');
+        }
+        
+        if (status === 'in-use') {
+            items.push('<li><a class="dropdown-item" href="#" onclick="performVolumeAction(\'' + volume.id + '\', \'detach\', \'' + volume.name + '\')"><i class="fas fa-unlink me-2 text-info"></i>卸载</a></li>');
+        }
+        
+        if (items.length > 0) {
+            items.push('<li><hr class="dropdown-divider"></li>');
+        }
+        
+        items.push('<li><a class="dropdown-item text-danger" href="#" onclick="performVolumeAction(\'' + volume.id + '\', \'delete\', \'' + volume.name + '\')"><i class="fas fa-trash me-2"></i>删除</a></li>');
+        
+        return items.join('');
+    }
+
+    // 更新统计信息
+    function updateStats(stats) {
+        document.getElementById('totalVolumes').textContent = stats.total_volumes;
+        document.getElementById('availableVolumes').textContent = stats.status_counts['available'] || 0;
+        document.getElementById('inUseVolumes').textContent = stats.status_counts['in-use'] || 0;
+    }
+
+    // 工具函数
+    function showLoading(show) {
+        const indicator = document.getElementById('loadingIndicator');
+        if (show) {
+            indicator.style.display = 'block';
+        } else {
+            indicator.style.display = 'none';
+        }
+        isLoading = show;
+    }
+
+    function showAlert(message, type) {
+        // 移除现有的alert
+        const existingAlerts = document.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const content = document.querySelector('main');
+        content.insertBefore(alertDiv, content.firstChild);
+        
+        // 自动删除
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+
+    function formatTime(isoString) {
+        if (!isoString) return '-';
+        const date = new Date(isoString);
+        return date.toLocaleString('zh-CN');
+    }
+
+    // 查看卷详情
+    async function viewVolumeDetail(volumeId) {
+        try {
+            document.getElementById('volumeDetailContent').innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                </div>
+            `;
+            
+            new bootstrap.Modal(document.getElementById('volumeDetailModal')).show();
+            
+            const response = await fetch(`/api/volumes/${volumeId}?cluster_id=${currentClusterId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                renderVolumeDetail(data.data);
+            } else {
+                document.getElementById('volumeDetailContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        加载失败: ${data.error}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error loading volume detail:', error);
+            document.getElementById('volumeDetailContent').innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    网络错误，请重试
+                </div>
+            `;
+        }
+    }
+
+    // 渲染卷详情
+    function renderVolumeDetail(volume) {
+        document.getElementById('volumeDetailContent').innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>基本信息</h6>
+                    <table class="table table-sm">
+                        <tr><td>名称</td><td>${volume.name}</td></tr>
+                        <tr><td>ID</td><td><code>${volume.id}</code></td></tr>
+                        <tr><td>状态</td><td><span class="badge ${getVolumeStatusClass(volume.status)}">${getVolumeStatusText(volume.status)}</span></td></tr>
+                        <tr><td>大小</td><td>${volume.size} GB</td></tr>
+                        <tr><td>类型</td><td>${volume.volume_type}</td></tr>
+                        <tr><td>可用区</td><td>${volume.availability_zone || '-'}</td></tr>
+                        <tr><td>创建时间</td><td>${formatTime(volume.created_at)}</td></tr>
+                        <tr><td>更新时间</td><td>${formatTime(volume.updated_at)}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6>挂载信息</h6>
+                    ${volume.attachments && volume.attachments.length > 0 ? 
+                        `<table class="table table-sm">
+                            <thead>
+                                <tr><th>实例ID</th><th>设备</th><th>挂载时间</th></tr>
+                            </thead>
+                            <tbody>
+                                ${volume.attachments.map(att => `
+                                    <tr>
+                                        <td><code>${att.instance_id}</code></td>
+                                        <td>${att.device || '-'}</td>
+                                        <td>${formatTime(att.attached_at)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>` : 
+                        '<p class="text-muted">未挂载到任何实例</p>'
+                    }
+                </div>
+            </div>
+            
+            ${volume.description ? `
+            <h6 class="mt-3">描述</h6>
+            <p>${volume.description}</p>
+            ` : ''}
+            
+            <h6 class="mt-3">元数据</h6>
+            ${volume.metadata && Object.keys(volume.metadata).length > 0 ? 
+                `<table class="table table-sm">
+                    ${Object.entries(volume.metadata).map(([key, value]) => `
+                        <tr><td>${key}</td><td>${value}</td></tr>
+                    `).join('')}
+                </table>` :
+                '<p class="text-muted">无元数据</p>'
+            }
+        `;
+    }
+
+    // 执行卷操作
+    function performVolumeAction(volumeId, action, volumeName) {
+        pendingAction = {
+            volumeId: volumeId,
+            action: action,
+            volumeName: volumeName
+        };
+        
+        if (action === 'extend') {
+            // 显示扩展卷模态框
+            currentExtendVolume = { id: volumeId, name: volumeName };
+            document.getElementById('extendVolumeName').value = volumeName;
+            // 需要获取当前大小
+            document.getElementById('extendCurrentSize').value = '获取中...';
+            new bootstrap.Modal(document.getElementById('extendVolumeModal')).show();
+            return;
+        }
+        
+        const actionMessages = {
+            'delete': `删除卷 "${volumeName}"，此操作不可逆！`,
+            'detach': `卸载卷 "${volumeName}" 的所有挂载`
+        };
+        
+        document.getElementById('actionMessage').textContent = `您确定要${actionMessages[action]}吗？`;
+        
+        // 设置确认按钮样式
+        const confirmBtn = document.getElementById('confirmActionBtn');
+        if (action === 'delete') {
+            confirmBtn.className = 'btn btn-danger';
+            confirmBtn.textContent = '确认删除';
+        } else {
+            confirmBtn.className = 'btn btn-primary';
+            confirmBtn.textContent = '确认';
+        }
+        
+        new bootstrap.Modal(document.getElementById('actionModal')).show();
+    }
+
+    // 确认操作
+    async function confirmAction() {
+        if (!pendingAction) return;
+        
+        const { volumeId, action, volumeName } = pendingAction;
+        const modal = bootstrap.Modal.getInstance(document.getElementById('actionModal'));
+        
+        try {
+            const response = await fetch(`/api/volumes/${volumeId}/action?cluster_id=${currentClusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ action: action })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert(data.message, 'success');
+                modal.hide();
+                
+                // 延迟刷新列表
+                setTimeout(() => {
+                    loadVolumes(currentPage);
+                }, 2000);
+            } else {
+                showAlert('操作失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error performing action:', error);
+            showAlert('操作失败，请重试', 'danger');
+        }
+        
+        pendingAction = null;
+    }
+
+    // 确认扩展卷
+    async function confirmExtendVolume() {
+        const newSize = document.getElementById('extendNewSize').value;
+        
+        if (!newSize || !currentExtendVolume) {
+            showAlert('请输入新的卷大小', 'warning');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/volumes/${currentExtendVolume.id}/action?cluster_id=${currentClusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ 
+                    action: 'extend',
+                    new_size: parseInt(newSize)
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert(data.message, 'success');
+                bootstrap.Modal.getInstance(document.getElementById('extendVolumeModal')).hide();
+                loadVolumes(currentPage);
+            } else {
+                showAlert('扩展卷失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Extend volume error:', error);
+            showAlert('扩展卷失败，请重试', 'danger');
+        }
+    }
+
+    // 刷新卷列表
+    function refreshVolumes() {
+        const select = document.getElementById('clusterSelect');
+        if (select.value === '') {
+            loadAllClustersVolumes(currentPage);
+        } else {
+            if (!currentClusterId) {
+                showAlert('请先选择一个集群', 'warning');
+                return;
+            }
+            loadVolumes(currentPage);
+        }
+    }
+
+    // 显示创建卷模态框
+    function showCreateVolumeModal() {
+        if (!currentClusterId) {
+            showAlert('请先选择一个集群', 'warning');
+            return;
+        }
+        new bootstrap.Modal(document.getElementById('createVolumeModal')).show();
+    }
+
+    // 创建卷
+    async function createVolume() {
+        const name = document.getElementById('volumeName').value.trim();
+        const size = document.getElementById('volumeSize').value;
+        const description = document.getElementById('volumeDescription').value.trim();
+        const volumeType = document.getElementById('volumeType').value;
+        const availabilityZone = document.getElementById('availabilityZone').value;
+
+        if (!name || !size) {
+            showAlert('请填写必填字段', 'warning');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/api/volumes/create?cluster_id=${currentClusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: name,
+                    size: parseInt(size),
+                    description: description,
+                    volume_type: volumeType,
+                    availability_zone: availabilityZone
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert(data.message, 'success');
+                bootstrap.Modal.getInstance(document.getElementById('createVolumeModal')).hide();
+                document.getElementById('createVolumeForm').reset();
+                loadVolumes(currentPage);
+            } else {
+                showAlert('创建卷失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Create volume error:', error);
+            showAlert('创建卷失败，请重试', 'danger');
+        }
+    }
+
+    // 渲染分页
+    function renderPagination(pagination) {
+        const container = document.getElementById('paginationContainer');
+        const ul = document.getElementById('pagination');
+
+        if (!pagination || pagination.pages <= 1) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        ul.innerHTML = '';
+
+        // 上一页
+        if (pagination.has_prev) {
+            ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="loadVolumePage(${pagination.page - 1})">上一页</a></li>`;
+        }
+
+        // 页码
+        const startPage = Math.max(1, pagination.page - 2);
+        const endPage = Math.min(pagination.pages, pagination.page + 2);
+        
+        if (startPage > 1) {
+            ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="loadVolumePage(1)">1</a></li>`;
+            if (startPage > 2) {
+                ul.innerHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const active = i === pagination.page ? 'active' : '';
+            ul.innerHTML += `<li class="page-item ${active}"><a class="page-link" href="#" onclick="loadVolumePage(${i})">${i}</a></li>`;
+        }
+        
+        if (endPage < pagination.pages) {
+            if (endPage < pagination.pages - 1) {
+                ul.innerHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+            ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="loadVolumePage(${pagination.pages})">${pagination.pages}</a></li>`;
+        }
+
+        // 下一页
+        if (pagination.has_next) {
+            ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="loadVolumePage(${pagination.page + 1})">下一页</a></li>`;
+        }
+    }
+
+    // 加载指定页
+    function loadVolumePage(page) {
+        const select = document.getElementById('clusterSelect');
+        if (select.value === '') {
+            loadAllClustersVolumes(page);
+        } else {
+            loadVolumes(page);
+        }
+    }
+
+    // 应用过滤器
+    function applyFilters() {
+        currentPage = 1;
+        const select = document.getElementById('clusterSelect');
+        if (select.value === '') {
+            loadAllClustersVolumes();
+        } else {
+            loadVolumes();
+        }
+    }
+
+    // 防抖搜索
+    function debounceSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            applyFilters();
+        }, 300);
+    }
+
+    // 切换视图模式
+    function toggleView() {
+        const cardView = document.getElementById('cardView');
+        const tableView = document.getElementById('tableView');
+        const viewToggle = document.getElementById('viewToggle');
+        const batchSelectHeader = document.getElementById('batchSelectHeader');
+        
+        if (currentView === 'card') {
+            // 切换到表格视图
+            cardView.style.display = 'none';
+            tableView.style.display = 'block';
+            viewToggle.innerHTML = '<i class="fas fa-table me-1"></i>表格视图';
+            currentView = 'table';
+            
+            // 在表格视图中显示批量选择
+            if (isBatchMode) {
+                batchSelectHeader.style.display = 'table-cell';
+            }
+            
+            // 重新渲染数据为表格格式
+            const select = document.getElementById('clusterSelect');
+            if (select.value === '') {
+                loadAllClustersVolumes(currentPage);
+            } else {
+                loadVolumes(currentPage);
+            }
+        } else {
+            // 切换到卡片视图
+            cardView.style.display = 'block';
+            tableView.style.display = 'none';
+            viewToggle.innerHTML = '<i class="fas fa-th me-1"></i>卡片视图';
+            currentView = 'card';
+            
+            // 重新渲染数据为卡片格式
+            const select = document.getElementById('clusterSelect');
+            if (select.value === '') {
+                loadAllClustersVolumes(currentPage);
+            } else {
+                loadVolumes(currentPage);
+            }
+        }
+    }
+
+    // 渲染表格视图
+    function renderVolumeTable(volumes) {
+        const tbody = document.getElementById('volumesTableBody');
+        
+        if (volumes.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="${isBatchMode ? '9' : '8'}" class="text-center text-muted">没有找到卷</td></tr>`;
+            return;
+        }
+        
+        tbody.innerHTML = volumes.map(volume => `
+            <tr data-volume-id="${volume.id}" ${selectedVolumes.has(volume.id) ? 'class="table-active"' : ''}>
+                ${isBatchMode ? `
+                <td>
+                    <input type="checkbox" class="volume-checkbox" value="${volume.id}" 
+                           ${selectedVolumes.has(volume.id) ? 'checked' : ''} 
+                           onchange="toggleVolumeSelection('${volume.id}')">
+                </td>
+                ` : ''}
+                <td><strong>${volume.name}</strong></td>
+                <td>
+                    <span class="badge ${getVolumeStatusClass(volume.status)}">
+                        ${getVolumeStatusText(volume.status)}
+                    </span>
+                </td>
+                <td>${volume.size}GB</td>
+                <td>${volume.volume_type}</td>
+                <td>
+                    ${volume.cluster_name ? `<span class="badge bg-info">${volume.cluster_name}</span>` : '未知集群'}
+                </td>
+                <td>${getAttachmentStatus(volume.attachments)}</td>
+                <td>${formatTime(volume.created_at)}</td>
+                <td>
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="viewVolumeDetail('${volume.id}')">
+                                <i class="fas fa-eye me-2"></i>查看详情
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            ${getVolumeActionMenuItems(volume)}
+                        </ul>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    // 切换批量模式
+    function toggleBatchMode() {
+        isBatchMode = !isBatchMode;
+        
+        const batchToolbar = document.getElementById('batchToolbar');
+        const batchOperationBtn = document.getElementById('batchOperationBtn');
+        const batchSelectHeader = document.getElementById('batchSelectHeader');
+        
+        if (isBatchMode) {
+            batchToolbar.style.display = 'block';
+            batchOperationBtn.innerHTML = '<i class="fas fa-times me-1"></i>退出批量';
+            batchOperationBtn.className = 'btn btn-outline-danger';
+            
+            if (currentView === 'table') {
+                batchSelectHeader.style.display = 'table-cell';
+            }
+        } else {
+            batchToolbar.style.display = 'none';
+            batchOperationBtn.innerHTML = '<i class="fas fa-tasks me-1"></i>批量操作';
+            batchOperationBtn.className = 'btn btn-outline-primary';
+            
+            if (currentView === 'table') {
+                batchSelectHeader.style.display = 'none';
+            }
+            
+            // 清除选择
+            clearSelection();
+        }
+        
+        // 重新渲染列表
+        const select = document.getElementById('clusterSelect');
+        if (select.value === '') {
+            loadAllClustersVolumes(currentPage);
+        } else {
+            loadVolumes(currentPage);
+        }
+    }
+
+    // 切换卷选择状态
+    function toggleVolumeSelection(volumeId) {
+        if (selectedVolumes.has(volumeId)) {
+            selectedVolumes.delete(volumeId);
+        } else {
+            selectedVolumes.add(volumeId);
+        }
+        
+        updateSelectedCount();
+        updateSelectAllCheckbox();
+        
+        // 更新视觉效果
+        const element = document.querySelector(`[data-volume-id="${volumeId}"]`);
+        if (element) {
+            if (selectedVolumes.has(volumeId)) {
+                if (currentView === 'card') {
+                    element.classList.add('border-primary');
+                } else {
+                    element.classList.add('table-active');
+                }
+            } else {
+                if (currentView === 'card') {
+                    element.classList.remove('border-primary');
+                } else {
+                    element.classList.remove('table-active');
+                }
+            }
+        }
+    }
+
+    // 全选/取消全选
+    function selectAllVolumes() {
+        const checkboxes = document.querySelectorAll('.volume-checkbox');
+        checkboxes.forEach(checkbox => {
+            selectedVolumes.add(checkbox.value);
+            checkbox.checked = true;
+        });
+        
+        updateSelectedCount();
+        updateSelectAllCheckbox();
+        
+        // 更新卡片样式
+        if (currentView === 'card') {
+            document.querySelectorAll('.volume-card').forEach(card => {
+                card.classList.add('border-primary');
+            });
+        } else {
+            document.querySelectorAll('#volumesTableBody tr').forEach(row => {
+                row.classList.add('table-active');
+            });
+        }
+    }
+
+    // 清除选择
+    function clearSelection() {
+        selectedVolumes.clear();
+        
+        // 取消所有复选框选中状态
+        document.querySelectorAll('.volume-checkbox').forEach(checkbox => {
+            checkbox.checked = false;
+        });
+        
+        // 移除卡片高亮
+        document.querySelectorAll('.volume-card').forEach(card => {
+            card.classList.remove('border-primary');
+        });
+        
+        // 移除表格行高亮
+        document.querySelectorAll('#volumesTableBody tr').forEach(row => {
+            row.classList.remove('table-active');
+        });
+        
+        updateSelectedCount();
+        updateSelectAllCheckbox();
+    }
+
+    // 更新选中数量显示
+    function updateSelectedCount() {
+        document.getElementById('selectedCount').textContent = `已选择 ${selectedVolumes.size} 个卷`;
+    }
+
+    // 更新全选复选框状态
+    function updateSelectAllCheckbox() {
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        if (!selectAllCheckbox) return;
+        
+        const checkboxes = document.querySelectorAll('.volume-checkbox');
+        
+        if (checkboxes.length === 0) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = false;
+            return;
+        }
+        
+        const checkedCount = selectedVolumes.size;
+        
+        if (checkedCount === 0) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = false;
+        } else if (checkedCount === checkboxes.length) {
+            selectAllCheckbox.indeterminate = false;
+            selectAllCheckbox.checked = true;
+        } else {
+            selectAllCheckbox.indeterminate = true;
+        }
+    }
+
+    // 全选复选框切换
+    function toggleSelectAll() {
+        const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+        
+        if (selectAllCheckbox.checked) {
+            selectAllVolumes();
+        } else {
+            clearSelection();
+        }
+    }
+
+    // 批量操作
+    async function batchAction(action) {
+        if (selectedVolumes.size === 0) {
+            showAlert('请先选择要操作的卷', 'warning');
+            return;
+        }
+        
+        const volumeIds = Array.from(selectedVolumes);
+        const actionNames = {
+            'detach': '卸载',
+            'delete': '删除'
+        };
+        
+        if (!confirm(`确定要${actionNames[action]} ${volumeIds.length} 个卷吗？`)) {
+            return;
+        }
+        
+        try {
+            showLoading(true);
+            
+            // 检查是否在"所有集群"模式
+            const select = document.getElementById('clusterSelect');
+            const isAllClusters = (select.value === '');
+            
+            let response;
+            if (isAllClusters) {
+                // 跨集群批量操作
+                response = await fetch(`/api/volumes/batch-action-cross-cluster`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        volume_ids: volumeIds,
+                        action: action
+                    })
+                });
+            } else {
+                // 单集群批量操作
+                response = await fetch(`/api/volumes/batch-action?cluster_id=${currentClusterId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        volume_ids: volumeIds,
+                        action: action
+                    })
+                });
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showBatchResults(data);
+                clearSelection();
+                
+                // 延迟刷新列表
+                setTimeout(() => {
+                    if (isAllClusters) {
+                        loadAllClustersVolumes(currentPage);
+                    } else {
+                        loadVolumes(currentPage);
+                    }
+                }, 2000);
+            } else {
+                showAlert('批量操作失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Batch operation error:', error);
+            showAlert('批量操作发生错误，请重试', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 显示批量操作结果
+    function showBatchResults(data) {
+        let resultHtml = `
+            <div class="alert alert-info">
+                <h6>操作汇总</h6>
+                <p>成功: ${data.success_count}/${data.total_count}</p>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>卷名称</th>
+                            <th>状态</th>
+                            <th>消息</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        data.results.forEach(result => {
+            const statusClass = result.success ? 'text-success' : 'text-danger';
+            const statusIcon = result.success ? 'fas fa-check' : 'fas fa-times';
+            const clusterInfo = result.cluster_name ? ` (${result.cluster_name})` : '';
+            resultHtml += `
+                <tr>
+                    <td>${result.volume_name}${clusterInfo}</td>
+                    <td><i class="${statusIcon} ${statusClass}"></i></td>
+                    <td class="${statusClass}">${result.success ? result.message : result.error}</td>
+                </tr>
+            `;
+        });
+        
+        resultHtml += '</tbody></table></div>';
+        
+        document.getElementById('batchResultContent').innerHTML = resultHtml;
+        new bootstrap.Modal(document.getElementById('batchResultModal')).show();
+    }
+
+    // 导出卷到Excel
+    async function exportVolumes() {
+        const select = document.getElementById('clusterSelect');
+        const isAllClusters = (select.value === '');
+        
+        if (!isAllClusters && !currentClusterId) {
+            showAlert('请先选择一个集群', 'warning');
+            return;
+        }
+        
+        try {
+            showLoading(true);
+            
+            const exportData = {
+                export_all: selectedVolumes.size === 0,
+                volume_ids: selectedVolumes.size > 0 ? Array.from(selectedVolumes) : [],
+                // 包含当前过滤条件
+                filters: {
+                    status: document.getElementById('statusFilter').value,
+                    search: document.getElementById('searchInput').value,
+                    volume_type: document.getElementById('volumeTypeFilter').value
+                }
+            };
+            
+            let response;
+            if (isAllClusters) {
+                // 跨集群导出
+                response = await fetch('/api/volumes/export-cross-cluster', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(exportData)
+                });
+            } else {
+                // 单集群导出
+                response = await fetch(`/api/volumes/export?cluster_id=${currentClusterId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(exportData)
+                });
+            }
+            
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                
+                // 从响应头获取文件名
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = 'volumes_export.xlsx';
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename[*]?=['"]?([^'";]+)['"]?/);
+                    if (filenameMatch) {
+                        filename = decodeURIComponent(filenameMatch[1]);
+                    }
+                }
+                
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                const exportCount = selectedVolumes.size > 0 ? selectedVolumes.size : '所有';
+                showAlert(`成功导出 ${exportCount} 个卷的数据到Excel文件`, 'success');
+            } else {
+                const data = await response.json();
+                showAlert('导出失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Export error:', error);
+            showAlert('导出失败，请重试', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+</script>
+{% endblock %}

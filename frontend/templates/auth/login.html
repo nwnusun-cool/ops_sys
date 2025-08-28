@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}登录 - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow">
+            <div class="card-header bg-primary text-white text-center">
+                <h4 class="mb-0">
+                    <i class="fas fa-sign-in-alt me-2"></i>用户登录
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label class="form-label">用户名</label>
+                        <input type="text" class="form-control" name="username" 
+                               value="{{ form_data.get('username', '') }}" placeholder="请输入用户名" required>
+                        {% if errors.username %}
+                            <div class="text-danger small mt-1">
+                                {{ errors.username }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">密码</label>
+                        <input type="password" class="form-control" name="password" placeholder="请输入密码" required>
+                        {% if errors.password %}
+                            <div class="text-danger small mt-1">
+                                {{ errors.password }}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" name="remember_me" 
+                               {% if form_data.get('remember_me') %}checked{% endif %}>
+                        <label class="form-check-label">记住我</label>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-sign-in-alt me-2"></i>登录
+                        </button>
+                    </div>
+                </form>
+                
+                <hr>
+                <div class="text-center">
+                    <small class="text-muted">
+                        <strong>测试账户:</strong><br>
+                        管理员: admin / admin123<br>
+                        操作员: test / test123
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center mt-3">
+            <small class="text-muted">
+                © 2024 OpenStack运维管理平台 v{{ version }}
+            </small>
+        </div>
+    </div>
+</div>
+{% endblock %}

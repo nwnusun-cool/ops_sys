@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+
+{% block title %}仪表盘 - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-tachometer-alt me-2"></i>仪表盘
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshStats()">
+                <i class="fas fa-sync-alt me-1"></i>刷新
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 欢迎信息 -->
+<div class="alert alert-info">
+    <h5 class="alert-heading">
+        <i class="fas fa-hand-wave me-2"></i>欢迎，{{ current_user.username }}！
+    </h5>
+    <p class="mb-0">您的权限级别：<strong>{{ current_user.role }}</strong> | 登录次数：{{ current_user.login_count }}</p>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary shadow h-100 py-2 card-stats">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            用户总数
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ stats.total_users }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-users fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2 card-stats success">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            活跃集群
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ stats.active_clusters }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-server fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-info shadow h-100 py-2 card-stats">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                            集群总数
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ stats.total_clusters }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-cloud fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-warning shadow h-100 py-2 card-stats warning">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            系统状态
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            正常
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-heartbeat fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最近的集群 -->
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-server me-2"></i>OpenStack集群
+                </h6>
+                <a href="{{ url_for('main.clusters') }}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-cog me-1"></i>管理集群
+                </a>
+            </div>
+            <div class="card-body">
+                {% if clusters %}
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>集群名称</th>
+                                <th>认证地址</th>
+                                <th>状态</th>
+                                <th>实例数</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cluster in clusters %}
+                            <tr>
+                                <td>
+                                    <i class="fas fa-server me-2"></i>{{ cluster.name }}
+                                    {% if cluster.description %}
+                                    <br><small class="text-muted">{{ cluster.description }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ cluster.auth_url }}</td>
+                                <td>
+                                    {% if cluster.connection_status == 'connected' %}
+                                        <span class="badge bg-success">已连接</span>
+                                    {% elif cluster.connection_status == 'failed' %}
+                                        <span class="badge bg-danger">连接失败</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">未知</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ cluster.instance_count or 0 }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-info" 
+                                            onclick="testConnection({{ cluster.id }})">
+                                        <i class="fas fa-plug"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-server fa-3x text-muted mb-3"></i>
+                    <p class="text-muted">暂无OpenStack集群</p>
+                    <a href="{{ url_for('main.clusters') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-2"></i>添加集群
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-info-circle me-2"></i>系统信息
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>平台版本:</strong> v{{ version }}
+                </div>
+                <div class="mb-3">
+                    <strong>当前用户:</strong> {{ current_user.username }}
+                </div>
+                <div class="mb-3">
+                    <strong>权限级别:</strong> 
+                    <span class="badge bg-primary">{{ current_user.role }}</span>
+                </div>
+                <div class="mb-3">
+                    <strong>上次登录:</strong> 
+                    {% if current_user.last_login %}
+                        {{ current_user.last_login.strftime('%Y-%m-%d %H:%M') }}
+                    {% else %}
+                        首次登录
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-rocket me-2"></i>快速操作
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('main.clusters') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-server me-2"></i>管理集群
+                    </a>
+                    
+                    <a href="/instances" class="btn btn-outline-info">
+                        <i class="fas fa-desktop me-2"></i>查看实例
+                    </a>
+                    
+                    {% if current_user.can_operate_resources() %}
+                    <a href="/volumes" class="btn btn-outline-success">
+                        <i class="fas fa-hdd me-2"></i>管理存储
+                    </a>
+                    {% endif %}
+                    
+                    <a href="{{ url_for('auth.profile') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-user-cog me-2"></i>个人设置
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function refreshStats() {
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            console.log('Stats refreshed:', data);
+            // 可以更新页面上的数据
+        })
+        .catch(error => console.error('Error:', error));
+}
+
+function testConnection(clusterId) {
+    const btn = event.target.closest('button');
+    const originalContent = btn.innerHTML;
+    
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+
+    fetch(`/api/clusters/${clusterId}/test`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert(`连接测试成功: ${data.message}`, 'success');
+            // 重新加载页面以更新状态
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showAlert(`连接测试失败: ${data.error}`, 'danger');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('测试连接时发生错误', 'danger');
+    })
+    .finally(() => {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+    });
+}
+
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    const container = document.querySelector('main');
+    container.insertBefore(alertDiv, container.firstChild);
+    
+    // 5秒后自动删除
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

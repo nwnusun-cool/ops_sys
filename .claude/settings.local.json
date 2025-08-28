@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(copy .env.example .env)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(sqlite3:*)",
+      "Bash(curl:*)",
+      "Bash(grep:*)",
+      "WebFetch(domain:localhost)"
+    ],
+    "deny": [],
+    "ask": [],
+    "additionalDirectories": [
+      "F:\\f\\私有仓库\\ops_sys"
+    ]
+  }
+}

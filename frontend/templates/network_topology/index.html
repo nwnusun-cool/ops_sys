@@ -1,0 +1,785 @@
+{% extends "base.html" %}
+
+{% block title %}网络拓扑 - {{ super() }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .topology-container {
+        height: calc(100vh - 200px);
+        min-height: 600px;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        position: relative;
+        overflow: hidden;
+        background: #f8f9fa;
+    }
+    
+    .topology-canvas {
+        width: 100%;
+        height: 100%;
+        cursor: grab;
+    }
+    
+    .topology-canvas:active {
+        cursor: grabbing;
+    }
+    
+    .topology-controls {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        z-index: 1000;
+        display: flex;
+        gap: 10px;
+        flex-direction: column;
+    }
+    
+    .topology-legend {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        z-index: 1000;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 15px;
+        border-radius: 0.375rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        min-width: 200px;
+    }
+    
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    
+    .legend-icon {
+        width: 20px;
+        height: 20px;
+        margin-right: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    
+    .legend-icon.network { background-color: #007bff; }
+    .legend-icon.router { background-color: #28a745; }
+    .legend-icon.instance { background-color: #ffc107; }
+    .legend-icon.subnet { background-color: #6f42c1; }
+    
+    .node-info-panel {
+        position: absolute;
+        bottom: 15px;
+        left: 15px;
+        right: 15px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 15px;
+        border-radius: 0.375rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        z-index: 1000;
+        max-height: 200px;
+        overflow-y: auto;
+        display: none;
+    }
+    
+    .stats-panel {
+        background: rgba(255, 255, 255, 0.9);
+        padding: 10px;
+        border-radius: 0.375rem;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.9);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        flex-direction: column;
+    }
+    
+    .topology-node {
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .topology-node:hover {
+        stroke: #333;
+        stroke-width: 3;
+    }
+    
+    .topology-link {
+        stroke: #999;
+        stroke-width: 2;
+        fill: none;
+    }
+    
+    .topology-text {
+        font-size: 12px;
+        text-anchor: middle;
+        pointer-events: none;
+        fill: #333;
+    }
+    
+    .btn-topology {
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 8px 12px;
+        margin-bottom: 5px;
+    }
+</style>
+
+<!-- 加载D3.js用于拓扑图绘制 -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">
+        <i class="fas fa-project-diagram me-2"></i>网络拓扑
+    </h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-outline-secondary" onclick="refreshTopology()">
+                <i class="fas fa-sync-alt me-1"></i>刷新
+            </button>
+        </div>
+        <div class="btn-group me-2">
+            <button type="button" class="btn btn-outline-primary" onclick="resetLayout()">
+                <i class="fas fa-expand-arrows-alt me-1"></i>重置布局
+            </button>
+        </div>
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-info" onclick="toggleLegend()">
+                <i class="fas fa-info-circle me-1"></i>图例
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 集群选择 -->
+<div class="row mb-3">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <label class="form-label">选择集群</label>
+                <select class="form-select" id="clusterSelect" onchange="onClusterChange()">
+                    <option value="">加载中...</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-9">
+        <div class="stats-panel" id="statsPanel">
+            <div class="row text-center">
+                <div class="col-3">
+                    <h6 class="text-primary">网络</h6>
+                    <h4 id="networksCount">0</h4>
+                </div>
+                <div class="col-3">
+                    <h6 class="text-success">路由</h6>
+                    <h4 id="routersCount">0</h4>
+                </div>
+                <div class="col-3">
+                    <h6 class="text-warning">实例</h6>
+                    <h4 id="instancesCount">0</h4>
+                </div>
+                <div class="col-3">
+                    <h6 class="text-info">子网</h6>
+                    <h4 id="subnetsCount">0</h4>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 拓扑图容器 -->
+<div class="topology-container" id="topologyContainer">
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">加载中...</span>
+        </div>
+        <p class="mt-2 text-muted">正在加载网络拓扑...</p>
+    </div>
+    
+    <!-- 图例面板 -->
+    <div class="topology-legend" id="legendPanel">
+        <h6 class="mb-3">图例</h6>
+        <div class="legend-item">
+            <span class="legend-icon network"></span>
+            <span>网络</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-icon router"></span>
+            <span>路由器</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-icon instance"></span>
+            <span>实例</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-icon subnet"></span>
+            <span>子网</span>
+        </div>
+    </div>
+    
+    <!-- 拓扑控制面板 -->
+    <div class="topology-controls">
+        <button type="button" class="btn btn-topology btn-sm" onclick="zoomIn()" title="放大">
+            <i class="fas fa-search-plus"></i>
+        </button>
+        <button type="button" class="btn btn-topology btn-sm" onclick="zoomOut()" title="缩小">
+            <i class="fas fa-search-minus"></i>
+        </button>
+        <button type="button" class="btn btn-topology btn-sm" onclick="fitToScreen()" title="适应屏幕">
+            <i class="fas fa-expand"></i>
+        </button>
+    </div>
+    
+    <!-- SVG画布 -->
+    <svg class="topology-canvas" id="topologySvg"></svg>
+    
+    <!-- 节点信息面板 -->
+    <div class="node-info-panel" id="nodeInfoPanel">
+        <button type="button" class="btn-close float-end" onclick="hideNodeInfo()"></button>
+        <div id="nodeInfoContent">
+            <!-- 节点信息将通过JavaScript填充 -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentClusterId = null;
+    let topologyData = null;
+    let svg = null;
+    let g = null;
+    let simulation = null;
+    let zoom = null;
+    let nodes = null;
+    let links = null;
+    
+    // 节点颜色配置
+    const nodeColors = {
+        network: '#007bff',
+        router: '#28a745',
+        instance: '#ffc107',
+        subnet: '#6f42c1'
+    };
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, initializing topology...');
+        initTopology();
+        loadClusters();
+    });
+
+    // 初始化拓扑图
+    function initTopology() {
+        const container = d3.select("#topologyContainer");
+        const containerNode = document.getElementById("topologyContainer");
+        const width = containerNode.offsetWidth;
+        const height = containerNode.offsetHeight;
+        
+        // 创建SVG
+        svg = d3.select("#topologySvg")
+            .attr("width", width)
+            .attr("height", height);
+        
+        // 创建缩放行为
+        zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+            });
+        
+        svg.call(zoom);
+        
+        // 创建主绘图组
+        g = svg.append("g");
+        
+        // 创建力导向图仿真
+        simulation = d3.forceSimulation()
+            .force("link", d3.forceLink().id(d => d.id).distance(150))
+            .force("charge", d3.forceManyBody().strength(-300))
+            .force("center", d3.forceCenter(width / 2, height / 2))
+            .force("collision", d3.forceCollide().radius(50));
+    }
+
+    // 加载集群列表
+    async function loadClusters() {
+        try {
+            const response = await fetch('/api/clusters');
+            const data = await response.json();
+            
+            if (data.success) {
+                const select = document.getElementById('clusterSelect');
+                select.innerHTML = '<option value="">请选择集群</option>';
+                
+                let firstConnectedCluster = null;
+                
+                data.data.forEach(cluster => {
+                    const option = document.createElement('option');
+                    option.value = cluster.id;
+                    option.textContent = `${cluster.name} (${cluster.connection_status})`;
+                    if (cluster.connection_status !== 'connected') {
+                        option.disabled = true;
+                        option.textContent += ' - 连接失败';
+                    } else if (!firstConnectedCluster) {
+                        firstConnectedCluster = cluster;
+                    }
+                    select.appendChild(option);
+                });
+                
+                // 自动选择第一个可用集群
+                if (firstConnectedCluster) {
+                    select.value = firstConnectedCluster.id;
+                    currentClusterId = firstConnectedCluster.id;
+                    onClusterChange();
+                }
+            } else {
+                showAlert('加载集群失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading clusters:', error);
+            showAlert('加载集群列表失败', 'danger');
+        }
+    }
+
+    // 集群选择变化
+    function onClusterChange() {
+        const select = document.getElementById('clusterSelect');
+        const selectedValue = select.value;
+        currentClusterId = selectedValue ? parseInt(selectedValue) : null;
+        
+        if (currentClusterId) {
+            loadTopologyData();
+        } else {
+            clearTopology();
+        }
+    }
+
+    // 加载拓扑数据
+    async function loadTopologyData() {
+        if (!currentClusterId) return;
+        
+        showLoading(true);
+        
+        try {
+            const response = await fetch(`/api/network-topology?cluster_id=${currentClusterId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                topologyData = data.data;
+                updateStatistics(topologyData.statistics);
+                renderTopology(topologyData);
+            } else {
+                showAlert('加载拓扑数据失败: ' + data.error, 'danger');
+                clearTopology();
+            }
+        } catch (error) {
+            console.error('Error loading topology data:', error);
+            showAlert('网络错误，请检查连接', 'danger');
+            clearTopology();
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 渲染拓扑图
+    function renderTopology(data) {
+        if (!data || !data.nodes || !data.edges) {
+            clearTopology();
+            return;
+        }
+        
+        // 清空现有内容
+        g.selectAll("*").remove();
+        
+        // 准备数据
+        const nodes = data.nodes.map(d => ({ ...d }));
+        const links = data.edges.map(d => ({ ...d }));
+        
+        // 创建链接
+        const link = g.append("g")
+            .selectAll("line")
+            .data(links)
+            .enter().append("line")
+            .attr("class", "topology-link")
+            .style("stroke", "#999")
+            .style("stroke-width", 2);
+        
+        // 创建节点组
+        const node = g.append("g")
+            .selectAll("g")
+            .data(nodes)
+            .enter().append("g")
+            .attr("class", "topology-node")
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended))
+            .on("click", nodeClicked)
+            .on("mouseover", nodeMouseOver)
+            .on("mouseout", nodeMouseOut);
+        
+        // 添加节点圆圈
+        node.append("circle")
+            .attr("r", d => getNodeRadius(d.type))
+            .style("fill", d => nodeColors[d.type] || '#666')
+            .style("stroke", "#fff")
+            .style("stroke-width", 2);
+        
+        // 添加节点文本
+        node.append("text")
+            .attr("class", "topology-text")
+            .attr("dy", d => getNodeRadius(d.type) + 15)
+            .style("font-size", "11px")
+            .style("text-anchor", "middle")
+            .style("fill", "#333")
+            .text(d => d.name.length > 12 ? d.name.substring(0, 12) + '...' : d.name);
+        
+        // 添加状态指示器
+        node.filter(d => d.data.status === 'ACTIVE' || d.data.status === 'active')
+            .append("circle")
+            .attr("r", 4)
+            .attr("cx", d => getNodeRadius(d.type) - 5)
+            .attr("cy", d => -getNodeRadius(d.type) + 5)
+            .style("fill", "#28a745");
+        
+        // 更新仿真
+        simulation.nodes(nodes);
+        simulation.force("link").links(links);
+        simulation.alpha(1).restart();
+        
+        // 仿真tick事件
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+            
+            node.attr("transform", d => `translate(${d.x},${d.y})`);
+        });
+    }
+
+    // 获取节点半径
+    function getNodeRadius(type) {
+        const radii = {
+            network: 25,
+            router: 20,
+            instance: 18,
+            subnet: 15
+        };
+        return radii[type] || 15;
+    }
+
+    // 节点点击事件
+    async function nodeClicked(event, d) {
+        event.stopPropagation();
+        await showNodeDetail(d);
+    }
+
+    // 显示节点详细信息
+    async function showNodeDetail(node) {
+        try {
+            const response = await fetch(`/api/network-topology/nodes/${node.type}/${node.data.id}?cluster_id=${currentClusterId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                renderNodeInfo(data.data, node.type);
+                document.getElementById('nodeInfoPanel').style.display = 'block';
+            } else {
+                showAlert('获取节点详情失败: ' + data.error, 'warning');
+            }
+        } catch (error) {
+            console.error('Error loading node detail:', error);
+            showAlert('加载节点详情失败', 'danger');
+        }
+    }
+
+    // 渲染节点信息
+    function renderNodeInfo(data, type) {
+        const content = document.getElementById('nodeInfoContent');
+        
+        let html = `<h6><i class="fas fa-${getNodeIcon(type)} me-2"></i>${data.name || data.id}</h6>`;
+        
+        if (type === 'network') {
+            html += `
+                <div class="row">
+                    <div class="col-6">
+                        <small class="text-muted">状态:</small><br>
+                        <span class="badge ${data.status === 'ACTIVE' ? 'bg-success' : 'bg-secondary'}">${data.status}</span>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">类型:</small><br>
+                        ${data.external ? '外部网络' : '内部网络'}
+                    </div>
+                </div>
+                <hr>
+                <small class="text-muted">ID:</small><br>
+                <code>${data.id}</code>
+            `;
+        } else if (type === 'router') {
+            html += `
+                <div class="row">
+                    <div class="col-6">
+                        <small class="text-muted">状态:</small><br>
+                        <span class="badge ${data.status === 'ACTIVE' ? 'bg-success' : 'bg-secondary'}">${data.status}</span>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">外部网关:</small><br>
+                        ${data.external_gateway_info ? '已配置' : '未配置'}
+                    </div>
+                </div>
+                <hr>
+                <small class="text-muted">ID:</small><br>
+                <code>${data.id}</code>
+            `;
+        } else if (type === 'instance') {
+            html += `
+                <div class="row">
+                    <div class="col-6">
+                        <small class="text-muted">状态:</small><br>
+                        <span class="badge ${data.status === 'ACTIVE' ? 'bg-success' : 'bg-secondary'}">${data.status}</span>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted">IP地址:</small><br>
+                        ${getInstanceIPs(data.addresses)}
+                    </div>
+                </div>
+                <hr>
+                <small class="text-muted">ID:</small><br>
+                <code>${data.id}</code>
+            `;
+        }
+        
+        content.innerHTML = html;
+    }
+
+    // 获取节点图标
+    function getNodeIcon(type) {
+        const icons = {
+            network: 'network-wired',
+            router: 'route',
+            instance: 'server',
+            subnet: 'layer-group'
+        };
+        return icons[type] || 'circle';
+    }
+
+    // 获取实例IP地址
+    function getInstanceIPs(addresses) {
+        if (!addresses) return 'N/A';
+        
+        const ips = [];
+        Object.values(addresses).forEach(networkAddresses => {
+            networkAddresses.forEach(addr => {
+                ips.push(addr.addr);
+            });
+        });
+        return ips.length > 0 ? ips.join(', ') : 'N/A';
+    }
+
+    // 节点鼠标悬停事件
+    function nodeMouseOver(event, d) {
+        d3.select(this).select("circle")
+            .style("stroke", "#333")
+            .style("stroke-width", 3);
+    }
+
+    function nodeMouseOut(event, d) {
+        d3.select(this).select("circle")
+            .style("stroke", "#fff")
+            .style("stroke-width", 2);
+    }
+
+    // 拖拽事件处理
+    function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+    }
+
+    function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+    }
+
+    function dragended(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+    }
+
+    // 更新统计信息
+    function updateStatistics(stats) {
+        document.getElementById('networksCount').textContent = stats.networks_count;
+        document.getElementById('routersCount').textContent = stats.routers_count;
+        document.getElementById('instancesCount').textContent = stats.instances_count;
+        document.getElementById('subnetsCount').textContent = stats.subnets_count;
+    }
+
+    // 清空拓扑图
+    function clearTopology() {
+        if (g) {
+            g.selectAll("*").remove();
+        }
+        updateStatistics({
+            networks_count: 0,
+            routers_count: 0,
+            instances_count: 0,
+            subnets_count: 0
+        });
+        hideNodeInfo();
+    }
+
+    // 隐藏节点信息面板
+    function hideNodeInfo() {
+        document.getElementById('nodeInfoPanel').style.display = 'none';
+    }
+
+    // 刷新拓扑
+    async function refreshTopology() {
+        if (!currentClusterId) {
+            showAlert('请先选择一个集群', 'warning');
+            return;
+        }
+        
+        showLoading(true);
+        
+        try {
+            const response = await fetch(`/api/network-topology/refresh?cluster_id=${currentClusterId}`, {
+                method: 'POST'
+            });
+            const data = await response.json();
+            
+            if (data.success) {
+                topologyData = data.data;
+                updateStatistics(topologyData.statistics);
+                renderTopology(topologyData);
+                showAlert('拓扑数据已刷新', 'success');
+            } else {
+                showAlert('刷新拓扑失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error refreshing topology:', error);
+            showAlert('刷新拓扑失败', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // 重置布局
+    function resetLayout() {
+        if (topologyData && simulation) {
+            simulation.alpha(1).restart();
+            
+            // 重置缩放
+            const containerNode = document.getElementById("topologyContainer");
+            const width = containerNode.offsetWidth;
+            const height = containerNode.offsetHeight;
+            
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(0, 0).scale(1)
+            );
+            
+            // 重新居中
+            simulation.force("center", d3.forceCenter(width / 2, height / 2));
+        }
+    }
+
+    // 缩放控制
+    function zoomIn() {
+        svg.transition().duration(300).call(
+            zoom.scaleBy, 1.5
+        );
+    }
+
+    function zoomOut() {
+        svg.transition().duration(300).call(
+            zoom.scaleBy, 0.7
+        );
+    }
+
+    function fitToScreen() {
+        if (!topologyData || !topologyData.nodes.length) return;
+        
+        const containerNode = document.getElementById("topologyContainer");
+        const width = containerNode.offsetWidth;
+        const height = containerNode.offsetHeight;
+        
+        // 计算节点边界
+        const bounds = g.node().getBBox();
+        const fullWidth = bounds.width;
+        const fullHeight = bounds.height;
+        
+        if (fullWidth === 0 || fullHeight === 0) return;
+        
+        const scale = Math.min(width / fullWidth, height / fullHeight) * 0.9;
+        const translate = [width / 2 - scale * (bounds.x + fullWidth / 2), height / 2 - scale * (bounds.y + fullHeight / 2)];
+        
+        svg.transition().duration(750).call(
+            zoom.transform,
+            d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+        );
+    }
+
+    // 切换图例显示
+    function toggleLegend() {
+        const legend = document.getElementById('legendPanel');
+        legend.style.display = legend.style.display === 'none' ? 'block' : 'none';
+    }
+
+    // 显示/隐藏加载动画
+    function showLoading(show) {
+        const overlay = document.getElementById('loadingOverlay');
+        overlay.style.display = show ? 'flex' : 'none';
+    }
+
+    // 显示提示信息
+    function showAlert(message, type) {
+        const existingAlerts = document.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const content = document.querySelector('main');
+        content.insertBefore(alertDiv, content.firstChild);
+        
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+
+    // 窗口大小变化时重新调整SVG
+    window.addEventListener('resize', function() {
+        const containerNode = document.getElementById("topologyContainer");
+        const width = containerNode.offsetWidth;
+        const height = containerNode.offsetHeight;
+        
+        if (svg) {
+            svg.attr("width", width).attr("height", height);
+            
+            if (simulation) {
+                simulation.force("center", d3.forceCenter(width / 2, height / 2));
+            }
+        }
+    });
+</script>
+{% endblock %}
