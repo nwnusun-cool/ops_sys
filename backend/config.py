@@ -27,7 +27,7 @@ class Config:
     SESSION_COOKIE_SAMESITE = 'Lax'
     
     # 文件上传配置
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
+    MAX_CONTENT_LENGTH = 50 * 1024 * 1024 * 1024  # 50GB (镜像文件可能很大)
     UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
     
     # 日志配置

@@ -7,7 +7,8 @@
       "Bash(sqlite3:*)",
       "Bash(curl:*)",
       "Bash(grep:*)",
-      "WebFetch(domain:localhost)"
+      "WebFetch(domain:localhost)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": [],

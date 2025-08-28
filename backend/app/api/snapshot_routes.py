@@ -21,202 +21,33 @@ def list_snapshots():
     try:
         # 获取查询参数
         cluster_id = request.args.get('cluster_id', type=int)
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 20, type=int)
-        snapshot_type = request.args.get('type')  # volume, instance
-        status = request.args.get('status')
-        search = request.args.get('search', '').strip()
-        
-        # 如果没有指定集群ID，选择默认集群
         if not cluster_id:
-            default_cluster = OpenstackCluster.query.filter_by(is_active=True).first()
-            if not default_cluster:
-                return jsonify({'success': False, 'error': '没有可用的集群'}), 400
-            clusters = [default_cluster]
-        else:
-            clusters = [OpenstackCluster.query.get_or_404(cluster_id)]
+            return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
-        # 获取所有快照数据
-        all_snapshots = []
-        cluster_names = []
+        # 构建过滤参数
+        filters = {
+            'page': request.args.get('page', 1, type=int),
+            'per_page': request.args.get('per_page', 20, type=int),
+            'type': request.args.get('type'),  # volume, instance
+            'status': request.args.get('status'),
+            'search': request.args.get('search', '').strip(),
+            'sort_by': request.args.get('sort_by', 'created_at'),
+            'sort_order': request.args.get('sort_order', 'desc')
+        }
         
-        for cluster in clusters:
-            try:
-                # 获取OpenStack客户端
-                clients = openstack_service.get_cluster_clients(cluster.id)
-                cinder_client = clients['cinder']
-                nova_client = clients['nova']
-                
-                logger.info(f"Getting snapshots for cluster {cluster.name}")
-                
-                # 获取卷快照
-                if not snapshot_type or snapshot_type == 'volume':
-                    try:
-                        volume_snapshots = cinder_client.volume_snapshots.list(detailed=True)
-                        for snapshot in volume_snapshots:
-                            all_snapshots.append((snapshot, cluster, 'volume'))
-                    except Exception as e:
-                        logger.warning(f"Failed to get volume snapshots: {e}")
-                
-                # 获取实例快照（镜像）
-                if not snapshot_type or snapshot_type == 'instance':
-                    try:
-                        glance_client = clients['glance']
-                        # 获取所有镜像，过滤出快照类型的
-                        images = list(glance_client.images.list())
-                        for image in images:
-                            # 判断是否为实例快照（通常有instance_uuid属性或image_type为snapshot）
-                            if (hasattr(image, 'instance_uuid') or 
-                                getattr(image, 'image_type', None) == 'snapshot' or
-                                'snapshot' in getattr(image, 'name', '').lower()):
-                                all_snapshots.append((image, cluster, 'instance'))
-                    except Exception as e:
-                        logger.warning(f"Failed to get instance snapshots: {e}")
-                
-                cluster_names.append(cluster.name)
-                
-            except Exception as e:
-                logger.warning(f"Failed to get snapshots from cluster {cluster.name}: {e}")
-                continue
-        
-        # 转换为字典格式
-        snapshots_data = []
-        
-        for snapshot, cluster, snap_type in all_snapshots:
-            if snap_type == 'volume':
-                # 卷快照
-                try:
-                    # 获取源卷信息
-                    volume_name = 'Unknown'
-                    if hasattr(snapshot, 'volume_id') and snapshot.volume_id:
-                        try:
-                            clients = openstack_service.get_cluster_clients(cluster.id)
-                            cinder_client = clients['cinder']
-                            volume = cinder_client.volumes.get(snapshot.volume_id)
-                            volume_name = volume.name or volume.id
-                        except:
-                            volume_name = snapshot.volume_id[:8] + '...'
-                    
-                    snapshot_data = {
-                        'id': snapshot.id,
-                        'name': snapshot.name or snapshot.id,
-                        'description': getattr(snapshot, 'description', ''),
-                        'status': snapshot.status,
-                        'size': snapshot.size,
-                        'volume_id': getattr(snapshot, 'volume_id', None),
-                        'volume_name': volume_name,
-                        'created_at': snapshot.created_at,
-                        'updated_at': getattr(snapshot, 'updated_at', None),
-                        'progress': getattr(snapshot, 'os-extended-snapshot-attributes:progress', '100%'),
-                        'project_id': getattr(snapshot, 'os-extended-snapshot-attributes:project_id', None),
-                        'metadata': getattr(snapshot, 'metadata', {}),
-                        'cluster_id': cluster.id,
-                        'cluster_name': cluster.name,
-                        'type': 'volume'
-                    }
-                except Exception as e:
-                    logger.warning(f"Error processing volume snapshot {snapshot.id}: {e}")
-                    continue
-            
-            else:
-                # 实例快照（镜像）
-                try:
-                    snapshot_data = {
-                        'id': snapshot.id,
-                        'name': snapshot.name or snapshot.id,
-                        'description': getattr(snapshot, 'description', ''),
-                        'status': snapshot.status,
-                        'size': getattr(snapshot, 'size', 0),
-                        'instance_id': getattr(snapshot, 'instance_uuid', None),
-                        'instance_name': getattr(snapshot, 'instance_uuid', 'Unknown'),
-                        'created_at': snapshot.created_at,
-                        'updated_at': snapshot.updated_at,
-                        'disk_format': getattr(snapshot, 'disk_format', 'unknown'),
-                        'container_format': getattr(snapshot, 'container_format', 'unknown'),
-                        'visibility': getattr(snapshot, 'visibility', 'private'),
-                        'min_disk': getattr(snapshot, 'min_disk', 0),
-                        'min_ram': getattr(snapshot, 'min_ram', 0),
-                        'cluster_id': cluster.id,
-                        'cluster_name': cluster.name,
-                        'type': 'instance'
-                    }
-                    
-                    # 尝试获取实例名称
-                    if snapshot_data['instance_id']:
-                        try:
-                            clients = openstack_service.get_cluster_clients(cluster.id)
-                            nova_client = clients['nova']
-                            instance = nova_client.servers.get(snapshot_data['instance_id'])
-                            snapshot_data['instance_name'] = instance.name
-                        except:
-                            pass
-                
-                except Exception as e:
-                    logger.warning(f"Error processing instance snapshot {snapshot.id}: {e}")
-                    continue
-            
-            snapshots_data.append(snapshot_data)
-        
-        # 应用过滤器
-        filtered_snapshots = snapshots_data
-        
-        # 类型过滤
-        if snapshot_type:
-            filtered_snapshots = [snap for snap in filtered_snapshots if snap['type'] == snapshot_type]
-        
-        # 状态过滤
-        if status:
-            filtered_snapshots = [snap for snap in filtered_snapshots if snap['status'].upper() == status.upper()]
-        
-        # 搜索过滤
-        if search:
-            search_lower = search.lower()
-            filtered_snapshots = [
-                snap for snap in filtered_snapshots
-                if search_lower in snap['name'].lower() or search_lower in snap['id']
-            ]
-        
-        # 分页
-        total = len(filtered_snapshots)
-        start_idx = (page - 1) * per_page
-        end_idx = start_idx + per_page
-        paginated_snapshots = filtered_snapshots[start_idx:end_idx]
-        
-        # 统计信息
-        status_counts = {}
-        type_counts = {'volume': 0, 'instance': 0}
-        total_size = 0
-        
-        for snapshot in snapshots_data:
-            status = snapshot['status']
-            status_counts[status] = status_counts.get(status, 0) + 1
-            
-            snap_type = snapshot['type']
-            type_counts[snap_type] = type_counts.get(snap_type, 0) + 1
-            
-            # 计算总大小
-            size = snapshot.get('size', 0)
-            if isinstance(size, (int, float)):
-                total_size += size
+        # 使用服务层方法获取快照列表
+        result = openstack_service.list_snapshots(cluster_id, filters)
         
         return jsonify({
             'success': True,
-            'data': paginated_snapshots,
+            'data': result['data'],
             'pagination': {
-                'page': page,
-                'per_page': per_page,
-                'total': total,
-                'pages': (total + per_page - 1) // per_page,
-                'has_next': end_idx < total,
-                'has_prev': page > 1
-            },
-            'statistics': {
-                'total_snapshots': len(snapshots_data),
-                'filtered_snapshots': total,
-                'status_counts': status_counts,
-                'type_counts': type_counts,
-                'total_size_gb': total_size,
-                'cluster_name': cluster_names[0] if len(cluster_names) == 1 else f"共 {len(cluster_names)} 个集群"
+                'page': result['page'],
+                'per_page': result['per_page'],
+                'total': result['total'],
+                'pages': result['total_pages'],
+                'has_next': result['page'] < result['total_pages'],
+                'has_prev': result['page'] > 1
             }
         })
         
@@ -419,90 +250,16 @@ def get_snapshot_detail(snapshot_id):
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
-        cluster = OpenstackCluster.query.get_or_404(cluster_id)
-        clients = openstack_service.get_cluster_clients(cluster_id)
+        # 使用服务层方法获取快照详情
+        snapshot_detail = openstack_service.get_snapshot_detail(cluster_id, snapshot_id, snapshot_type)
         
-        if snapshot_type == 'volume':
-            # 卷快照详情
-            cinder_client = clients['cinder']
-            snapshot = cinder_client.volume_snapshots.get(snapshot_id)
-            
-            # 获取源卷信息
-            volume_info = {}
-            if hasattr(snapshot, 'volume_id') and snapshot.volume_id:
-                try:
-                    volume = cinder_client.volumes.get(snapshot.volume_id)
-                    volume_info = {
-                        'id': volume.id,
-                        'name': volume.name or volume.id,
-                        'size': volume.size,
-                        'status': volume.status,
-                        'volume_type': getattr(volume, 'volume_type', 'Unknown')
-                    }
-                except Exception as e:
-                    logger.warning(f"Failed to get volume info: {e}")
-            
-            snapshot_detail = {
-                'id': snapshot.id,
-                'name': snapshot.name or snapshot.id,
-                'description': getattr(snapshot, 'description', ''),
-                'status': snapshot.status,
-                'size': snapshot.size,
-                'volume_id': getattr(snapshot, 'volume_id', None),
-                'volume_info': volume_info,
-                'created_at': snapshot.created_at,
-                'updated_at': getattr(snapshot, 'updated_at', None),
-                'progress': getattr(snapshot, 'os-extended-snapshot-attributes:progress', '100%'),
-                'project_id': getattr(snapshot, 'os-extended-snapshot-attributes:project_id', None),
-                'metadata': getattr(snapshot, 'metadata', {}),
-                'cluster_name': cluster.name,
-                'type': 'volume'
-            }
+        if snapshot_detail:
+            return jsonify({
+                'success': True,
+                'data': snapshot_detail
+            })
         else:
-            # 实例快照（镜像）详情
-            glance_client = clients['glance']
-            snapshot = glance_client.images.get(snapshot_id)
-            
-            # 获取实例信息
-            instance_info = {}
-            instance_uuid = getattr(snapshot, 'instance_uuid', None)
-            if instance_uuid:
-                try:
-                    nova_client = clients['nova']
-                    instance = nova_client.servers.get(instance_uuid)
-                    instance_info = {
-                        'id': instance.id,
-                        'name': instance.name,
-                        'status': instance.status,
-                        'flavor': getattr(instance.flavor, 'name', 'Unknown')
-                    }
-                except Exception as e:
-                    logger.warning(f"Failed to get instance info: {e}")
-            
-            snapshot_detail = {
-                'id': snapshot.id,
-                'name': snapshot.name or snapshot.id,
-                'description': getattr(snapshot, 'description', ''),
-                'status': snapshot.status,
-                'size': getattr(snapshot, 'size', 0),
-                'instance_id': instance_uuid,
-                'instance_info': instance_info,
-                'created_at': snapshot.created_at,
-                'updated_at': snapshot.updated_at,
-                'disk_format': getattr(snapshot, 'disk_format', 'unknown'),
-                'container_format': getattr(snapshot, 'container_format', 'unknown'),
-                'visibility': getattr(snapshot, 'visibility', 'private'),
-                'min_disk': getattr(snapshot, 'min_disk', 0),
-                'min_ram': getattr(snapshot, 'min_ram', 0),
-                'checksum': getattr(snapshot, 'checksum', None),
-                'cluster_name': cluster.name,
-                'type': 'instance'
-            }
-        
-        return jsonify({
-            'success': True,
-            'data': snapshot_detail
-        })
+            return jsonify({'success': False, 'error': '快照不存在'}), 404
         
     except Exception as e:
         logger.error(f"Failed to get snapshot detail {snapshot_id}: {str(e)}")
@@ -774,3 +531,24 @@ def create_snapshot():
             pass
         
         return jsonify({'success': False, 'error': error_msg}), 500
+
+@api.route('/snapshots/statistics', methods=['GET'])
+@login_required
+def get_snapshot_statistics():
+    """获取快照统计信息"""
+    try:
+        cluster_id = request.args.get('cluster_id', type=int)
+        if not cluster_id:
+            return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
+        
+        cluster = OpenstackCluster.query.get_or_404(cluster_id)
+        stats = openstack_service.get_snapshot_statistics(cluster_id)
+        
+        return jsonify({
+            'success': True,
+            'data': stats
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get snapshot statistics for cluster {cluster_id}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

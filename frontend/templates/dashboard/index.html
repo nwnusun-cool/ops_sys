@@ -2,19 +2,19 @@
 
 {% block title %}仪表盘 - {{ super() }}{% endblock %}
 
-{% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">
-        <i class="fas fa-tachometer-alt me-2"></i>仪表盘
-    </h1>
-    <div class="btn-toolbar mb-2 mb-md-0">
-        <div class="btn-group me-2">
-            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshStats()">
-                <i class="fas fa-sync-alt me-1"></i>刷新
-            </button>
-        </div>
-    </div>
+{% block page_header %}
+<h1 class="page-title">
+    <i class="fas fa-tachometer-alt"></i>
+    仪表盘
+</h1>
+<div class="btn-toolbar mb-2 mb-md-0">
+    <button type="button" class="btn btn-outline-primary" onclick="refreshStats()">
+        <i class="fas fa-sync-alt me-1"></i>刷新数据
+    </button>
 </div>
+{% endblock %}
+
+{% block content %}
 
 <!-- 欢迎信息 -->
 <div class="alert alert-info">

@@ -147,6 +147,121 @@
         </div>
     </div>
 </div>
+
+<!-- 创建快照模态框 -->
+<div class="modal fade" id="createSnapshotModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-camera me-2"></i>创建快照
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="createSnapshotForm">
+                <div class="modal-body">
+                    <!-- 快照类型选择 -->
+                    <div class="mb-3">
+                        <label class="form-label">快照类型</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="snapshotType" id="snapshotTypeVolume" value="volume" checked>
+                            <label class="btn btn-outline-primary" for="snapshotTypeVolume">
+                                <i class="fas fa-hdd me-1"></i>卷快照
+                            </label>
+                            <input type="radio" class="btn-check" name="snapshotType" id="snapshotTypeInstance" value="instance">
+                            <label class="btn btn-outline-info" for="snapshotTypeInstance">
+                                <i class="fas fa-desktop me-1"></i>实例快照
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <!-- 基本信息 -->
+                        <div class="col-md-6">
+                            <h6 class="fw-bold mb-3">基本信息</h6>
+                            <div class="mb-3">
+                                <label for="snapshotName" class="form-label">快照名称 *</label>
+                                <input type="text" class="form-control" id="snapshotName" name="name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="snapshotDescription" class="form-label">描述</label>
+                                <textarea class="form-control" id="snapshotDescription" name="description" rows="3"></textarea>
+                            </div>
+                        </div>
+                        
+                        <!-- 源对象选择 -->
+                        <div class="col-md-6">
+                            <h6 class="fw-bold mb-3">源对象选择</h6>
+                            
+                            <!-- 卷快照源 -->
+                            <div id="volumeSourceSection">
+                                <div class="mb-3">
+                                    <label for="sourceVolume" class="form-label">源卷 *</label>
+                                    <select class="form-select" id="sourceVolume" name="volume_id">
+                                        <option value="">加载中...</option>
+                                    </select>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="forceSnapshot" name="force">
+                                    <label class="form-check-label" for="forceSnapshot">
+                                        强制创建（即使卷正在使用中）
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- 实例快照源 -->
+                            <div id="instanceSourceSection" style="display: none;">
+                                <div class="mb-3">
+                                    <label for="sourceInstance" class="form-label">源实例 *</label>
+                                    <select class="form-select" id="sourceInstance" name="instance_id">
+                                        <option value="">加载中...</option>
+                                    </select>
+                                </div>
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    <small>实例快照将创建为镜像，可用于后续创建新的实例</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="submit" class="btn btn-primary" id="createSnapshotBtn">
+                        <i class="fas fa-camera me-1"></i>创建快照
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 创建进度模态框 -->
+<div class="modal fade" id="createProgressModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-camera me-2"></i>创建快照中
+                </h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">创建中...</span>
+                </div>
+                <div class="alert alert-info mb-0" id="createProgressStatus">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <span id="createProgressText">正在创建快照，请稍候...</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" id="createCompleteBtn" style="display: none;" onclick="closeCreateProgressModal()">
+                    <i class="fas fa-check me-1"></i>完成
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -159,7 +274,34 @@
     document.addEventListener('DOMContentLoaded', function() {
         console.log('DOM loaded, attempting to load clusters...');
         loadClusters();
+        initEventListeners();
     });
+    
+    // 初始化事件监听器
+    function initEventListeners() {
+        // 快照类型切换
+        document.querySelectorAll('input[name="snapshotType"]').forEach(radio => {
+            radio.addEventListener('change', function() {
+                const volumeSection = document.getElementById('volumeSourceSection');
+                const instanceSection = document.getElementById('instanceSourceSection');
+                
+                if (this.value === 'volume') {
+                    volumeSection.style.display = 'block';
+                    instanceSection.style.display = 'none';
+                    document.getElementById('sourceVolume').required = true;
+                    document.getElementById('sourceInstance').required = false;
+                } else {
+                    volumeSection.style.display = 'none';
+                    instanceSection.style.display = 'block';
+                    document.getElementById('sourceVolume').required = false;
+                    document.getElementById('sourceInstance').required = true;
+                }
+            });
+        });
+        
+        // 创建快照表单提交
+        document.getElementById('createSnapshotForm').addEventListener('submit', handleCreateSnapshot);
+    }
 
     // 加载集群列表
     async function loadClusters() {
@@ -219,10 +361,21 @@
 
     // 集群选择变化
     function onClusterChange() {
+        const select = document.getElementById('clusterSelect');
+        const selectedValue = select.value;
+        currentClusterId = selectedValue ? parseInt(selectedValue) : null;
+        
         console.log('Cluster changed to:', currentClusterId);
-        document.getElementById('snapshotsCard').style.display = 'block';
-        // 这里可以添加加载快照列表的逻辑
-        showAlert('集群切换成功，快照管理功能开发中...', 'info');
+        
+        if (currentClusterId) {
+            document.getElementById('snapshotsCard').style.display = 'block';
+            loadSnapshots();
+            loadSnapshotStatistics();
+        } else {
+            clearSnapshotsList();
+            clearStatistics();
+            document.getElementById('snapshotsCard').style.display = 'none';
+        }
     }
 
     // 工具函数
@@ -259,13 +412,662 @@
         }, 5000);
     }
 
-    // 占位函数
+    // 加载快照列表
+    async function loadSnapshots(page = 1) {
+        if (!currentClusterId) return;
+        
+        try {
+            showLoading(true);
+            
+            const params = new URLSearchParams({
+                cluster_id: currentClusterId,
+                page: page,
+                per_page: 20
+            });
+            
+            const response = await fetch(`/api/snapshots?${params}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                renderSnapshotsList(data.data);
+                updateSnapshotCount(data.pagination.total);
+            } else {
+                showAlert('加载快照列表失败: ' + data.error, 'danger');
+                clearSnapshotsList();
+            }
+        } catch (error) {
+            console.error('Error loading snapshots:', error);
+            showAlert('加载快照列表时发生错误', 'danger');
+            clearSnapshotsList();
+        } finally {
+            showLoading(false);
+        }
+    }
+    
+    // 加载快照统计信息
+    async function loadSnapshotStatistics() {
+        if (!currentClusterId) return;
+        
+        try {
+            const response = await fetch(`/api/snapshots/statistics?cluster_id=${currentClusterId}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                updateStatisticsDisplay(data.data);
+            }
+        } catch (error) {
+            console.error('Error loading snapshot statistics:', error);
+        }
+    }
+    
+    // 渲染快照列表
+    function renderSnapshotsList(snapshots) {
+        const container = document.getElementById('snapshotsContainer');
+        const emptyState = document.getElementById('emptyState');
+        
+        if (!snapshots || snapshots.length === 0) {
+            container.innerHTML = '';
+            emptyState.style.display = 'block';
+            return;
+        }
+        
+        emptyState.style.display = 'none';
+        
+        container.innerHTML = snapshots.map(snapshot => {
+            const statusClass = getStatusClass(snapshot.status);
+            const typeIcon = snapshot.type === 'volume' ? 'hdd' : 'desktop';
+            const sourceName = snapshot.type === 'volume' ? snapshot.volume_name : snapshot.instance_name;
+            const sourceId = snapshot.type === 'volume' ? snapshot.volume_id : snapshot.instance_id;
+            
+            return `
+                <div class="col-md-6 col-lg-4 mb-3">
+                    <div class="card snapshot-card status-${snapshot.status} type-${snapshot.type}">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="fas fa-${typeIcon} me-2"></i>
+                                ${snapshot.name}
+                            </h6>
+                            <span class="status-badge badge ${statusClass}">${snapshot.status.toUpperCase()}</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <small class="text-muted">类型:</small>
+                                <span class="badge ${snapshot.type === 'volume' ? 'bg-primary' : 'bg-info'}">
+                                    ${snapshot.type === 'volume' ? '卷快照' : '实例快照'}
+                                </span>
+                            </div>
+                            <div class="mb-2">
+                                <small class="text-muted">源对象:</small>
+                                <br><small>${sourceName}</small>
+                            </div>
+                            <div class="mb-2">
+                                <small class="text-muted">大小:</small>
+                                <strong>${snapshot.size_readable}</strong>
+                            </div>
+                            <div class="mb-2 size-info">
+                                创建时间: ${snapshot.created_at || 'N/A'}
+                            </div>
+                            ${snapshot.description ? `<div class="mb-2 size-info">${snapshot.description}</div>` : ''}
+                        </div>
+                        <div class="card-footer snapshot-actions">
+                            <div class="btn-group btn-group-sm w-100">
+                                <button class="btn btn-outline-primary" onclick="showSnapshotDetail('${snapshot.id}', '${snapshot.type}')" title="详情">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-outline-success" onclick="showRestoreModal('${snapshot.id}', '${snapshot.name}', '${snapshot.type}')" title="恢复">
+                                    <i class="fas fa-undo"></i>
+                                </button>
+                                <button class="btn btn-outline-danger" onclick="deleteSnapshot('${snapshot.id}', '${snapshot.name}', '${snapshot.type}')" title="删除">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+    
+    // 获取状态样式类
+    function getStatusClass(status) {
+        const statusMap = {
+            'available': 'bg-success',
+            'active': 'bg-success', 
+            'creating': 'bg-warning',
+            'saving': 'bg-warning',
+            'error': 'bg-danger',
+            'deleting': 'bg-secondary',
+            'deleted': 'bg-secondary'
+        };
+        return statusMap[status] || 'bg-secondary';
+    }
+    
+    // 更新统计显示
+    function updateStatisticsDisplay(stats) {
+        document.getElementById('totalSnapshots').textContent = stats.total_count;
+        document.getElementById('volumeSnapshots').textContent = stats.volume_snapshot_count;
+        document.getElementById('instanceSnapshots').textContent = stats.instance_snapshot_count;
+    }
+    
+    // 更新快照数量
+    function updateSnapshotCount(count) {
+        document.getElementById('snapshotCount').textContent = count;
+    }
+    
+    // 清空快照列表
+    function clearSnapshotsList() {
+        document.getElementById('snapshotsContainer').innerHTML = '';
+        document.getElementById('emptyState').style.display = 'block';
+        updateSnapshotCount(0);
+    }
+    
+    // 清空统计
+    function clearStatistics() {
+        document.getElementById('totalSnapshots').textContent = '-';
+        document.getElementById('volumeSnapshots').textContent = '-';
+        document.getElementById('instanceSnapshots').textContent = '-';
+    }
+    
+    // 显示快照详情
+    async function showSnapshotDetail(snapshotId, snapshotType) {
+        try {
+            const response = await fetch(`/api/snapshots/${snapshotId}?cluster_id=${currentClusterId}&type=${snapshotType}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                // 创建详情模态框内容
+                const snapshot = data.data;
+                const modalHtml = `
+                    <div class="modal fade" id="snapshotDetailModal" tabindex="-1">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">
+                                        <i class="fas fa-info-circle me-2"></i>快照详情
+                                    </h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h6 class="fw-bold mb-3">基本信息</h6>
+                                            <table class="table table-sm">
+                                                <tr><td class="fw-bold">名称:</td><td>${snapshot.name}</td></tr>
+                                                <tr><td class="fw-bold">ID:</td><td><code>${snapshot.id}</code></td></tr>
+                                                <tr><td class="fw-bold">状态:</td><td><span class="badge ${getStatusClass(snapshot.status)}">${snapshot.status}</span></td></tr>
+                                                <tr><td class="fw-bold">类型:</td><td>${snapshot.type === 'volume' ? '卷快照' : '实例快照'}</td></tr>
+                                                <tr><td class="fw-bold">大小:</td><td>${snapshot.size_readable}</td></tr>
+                                                <tr><td class="fw-bold">描述:</td><td>${snapshot.description || '无描述'}</td></tr>
+                                            </table>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h6 class="fw-bold mb-3">源对象信息</h6>
+                                            <table class="table table-sm">
+                                                ${snapshot.type === 'volume' ? `
+                                                    <tr><td class="fw-bold">源卷ID:</td><td>${snapshot.volume_id || 'N/A'}</td></tr>
+                                                    <tr><td class="fw-bold">源卷名称:</td><td>${snapshot.volume_name || 'N/A'}</td></tr>
+                                                ` : `
+                                                    <tr><td class="fw-bold">源实例ID:</td><td>${snapshot.instance_id || 'N/A'}</td></tr>
+                                                    <tr><td class="fw-bold">源实例名称:</td><td>${snapshot.instance_name || 'N/A'}</td></tr>
+                                                    <tr><td class="fw-bold">磁盘格式:</td><td>${snapshot.disk_format || 'N/A'}</td></tr>
+                                                    <tr><td class="fw-bold">容器格式:</td><td>${snapshot.container_format || 'N/A'}</td></tr>
+                                                `}
+                                                <tr><td class="fw-bold">创建时间:</td><td>${snapshot.created_at || 'N/A'}</td></tr>
+                                                <tr><td class="fw-bold">更新时间:</td><td>${snapshot.updated_at || 'N/A'}</td></tr>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // 移除已有的模态框
+                const existingModal = document.getElementById('snapshotDetailModal');
+                if (existingModal) {
+                    existingModal.remove();
+                }
+                
+                // 添加新的模态框
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                
+                // 显示模态框
+                const modal = new bootstrap.Modal(document.getElementById('snapshotDetailModal'));
+                modal.show();
+                
+                // 模态框关闭后移除DOM
+                document.getElementById('snapshotDetailModal').addEventListener('hidden.bs.modal', function() {
+                    this.remove();
+                });
+            } else {
+                showAlert('获取快照详情失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading snapshot detail:', error);
+            showAlert('加载快照详情时发生错误', 'danger');
+        }
+    }
+    
+    // 删除快照
+    async function deleteSnapshot(snapshotId, snapshotName, snapshotType) {
+        if (!confirm(`确定要删除快照 "${snapshotName}" 吗？此操作不可撤销。`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/snapshots/${snapshotId}/action?cluster_id=${currentClusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'delete',
+                    type: snapshotType
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert('快照删除成功', 'success');
+                loadSnapshots();
+                loadSnapshotStatistics();
+            } else {
+                showAlert('删除失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error deleting snapshot:', error);
+            showAlert('删除快照时发生错误', 'danger');
+        }
+    }
+    
+    // 显示恢复模态框
+    function showRestoreModal(snapshotId, snapshotName, snapshotType) {
+        if (snapshotType === 'volume') {
+            showVolumeRestoreModal(snapshotId, snapshotName);
+        } else {
+            showInstanceRestoreModal(snapshotId, snapshotName);
+        }
+    }
+    
+    // 显示卷恢复模态框
+    function showVolumeRestoreModal(snapshotId, snapshotName) {
+        const modalHtml = `
+            <div class="modal fade" id="volumeRestoreModal" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">
+                                <i class="fas fa-undo me-2"></i>从快照创建卷
+                            </h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <form id="volumeRestoreForm">
+                            <div class="modal-body">
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    将从快照 "<strong>${snapshotName}</strong>" 创建新的卷
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="newVolumeName" class="form-label">新卷名称 *</label>
+                                    <input type="text" class="form-control" id="newVolumeName" name="volume_name" 
+                                           value="vol-from-${snapshotName}" required>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="newVolumeSize" class="form-label">卷大小 (GB)</label>
+                                    <input type="number" class="form-control" id="newVolumeSize" name="volume_size" 
+                                           min="1" placeholder="留空使用快照原始大小">
+                                    <div class="form-text">大小必须大于或等于快照的原始大小</div>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="newVolumeDescription" class="form-label">描述</label>
+                                    <textarea class="form-control" id="newVolumeDescription" name="description" 
+                                              rows="2" placeholder="可选的卷描述"></textarea>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                                <button type="submit" class="btn btn-success" id="volumeRestoreBtn">
+                                    <i class="fas fa-undo me-1"></i>创建卷
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // 移除已有的模态框
+        const existingModal = document.getElementById('volumeRestoreModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // 添加新的模态框
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // 绑定表单提交事件
+        document.getElementById('volumeRestoreForm').addEventListener('submit', function(event) {
+            handleVolumeRestore(event, snapshotId);
+        });
+        
+        // 显示模态框
+        const modal = new bootstrap.Modal(document.getElementById('volumeRestoreModal'));
+        modal.show();
+        
+        // 模态框关闭后移除DOM
+        document.getElementById('volumeRestoreModal').addEventListener('hidden.bs.modal', function() {
+            this.remove();
+        });
+    }
+    
+    // 处理从快照创建卷
+    async function handleVolumeRestore(event, snapshotId) {
+        event.preventDefault();
+        
+        const formData = new FormData(event.target);
+        const volumeName = formData.get('volume_name').trim();
+        
+        if (!volumeName) {
+            showAlert('请输入卷名称', 'warning');
+            return;
+        }
+        
+        const submitBtn = document.getElementById('volumeRestoreBtn');
+        const originalContent = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>创建中...';
+        
+        try {
+            const requestData = {
+                action: 'create_volume',
+                type: 'volume',
+                volume_name: volumeName
+            };
+            
+            const volumeSize = formData.get('volume_size');
+            if (volumeSize) {
+                requestData.volume_size = parseInt(volumeSize);
+            }
+            
+            const description = formData.get('description').trim();
+            if (description) {
+                requestData.description = description;
+            }
+            
+            const response = await fetch(`/api/snapshots/${snapshotId}/action?cluster_id=${currentClusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert('卷创建任务已提交成功', 'success');
+                // 关闭模态框
+                const modal = bootstrap.Modal.getInstance(document.getElementById('volumeRestoreModal'));
+                modal.hide();
+                // 刷新快照列表以显示最新状态
+                setTimeout(() => {
+                    loadSnapshots();
+                }, 1000);
+            } else {
+                showAlert('创建卷失败: ' + data.error, 'danger');
+            }
+            
+        } catch (error) {
+            console.error('Error creating volume from snapshot:', error);
+            showAlert('创建卷时发生错误', 'danger');
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalContent;
+        }
+    }
+    
+    // 显示实例恢复模态框
+    function showInstanceRestoreModal(snapshotId, snapshotName) {
+        showAlert(`从实例快照 "${snapshotName}" 创建实例功能开发中...`, 'info');
+        // 实例快照恢复比较复杂，需要选择规格、网络等，可以后续完善
+    }
+    
+    // 创建快照功能
     function showCreateSnapshotModal() {
-        showAlert('创建快照功能开发中...', 'info');
+        if (!currentClusterId) {
+            showAlert('请先选择一个集群', 'warning');
+            return;
+        }
+        
+        // 重置表单
+        document.getElementById('createSnapshotForm').reset();
+        document.getElementById('snapshotTypeVolume').checked = true;
+        document.getElementById('snapshotTypeVolume').dispatchEvent(new Event('change'));
+        
+        // 加载卷和实例列表
+        loadVolumesForSnapshot();
+        loadInstancesForSnapshot();
+        
+        // 显示模态框
+        const modal = new bootstrap.Modal(document.getElementById('createSnapshotModal'));
+        modal.show();
+    }
+    
+    // 加载卷列表
+    async function loadVolumesForSnapshot() {
+        try {
+            const response = await fetch(`/api/volumes?cluster_id=${currentClusterId}&per_page=100`);
+            const data = await response.json();
+            
+            const select = document.getElementById('sourceVolume');
+            select.innerHTML = '<option value="">请选择卷</option>';
+            
+            if (data.success && data.data) {
+                data.data.forEach(volume => {
+                    const option = document.createElement('option');
+                    option.value = volume.id;
+                    option.textContent = `${volume.name || volume.id} (${volume.size}GB, ${volume.status})`;
+                    option.disabled = volume.status !== 'available' && volume.status !== 'in-use';
+                    select.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading volumes:', error);
+            document.getElementById('sourceVolume').innerHTML = '<option value="">加载失败</option>';
+        }
+    }
+    
+    // 加载实例列表
+    async function loadInstancesForSnapshot() {
+        try {
+            const response = await fetch(`/api/instances?cluster_id=${currentClusterId}&per_page=100`);
+            const data = await response.json();
+            
+            const select = document.getElementById('sourceInstance');
+            select.innerHTML = '<option value="">请选择实例</option>';
+            
+            if (data.success && data.data) {
+                data.data.forEach(instance => {
+                    const option = document.createElement('option');
+                    option.value = instance.id;
+                    option.textContent = `${instance.name} (${instance.status})`;
+                    option.disabled = instance.status !== 'ACTIVE' && instance.status !== 'SHUTOFF';
+                    select.appendChild(option);
+                });
+            }
+        } catch (error) {
+            console.error('Error loading instances:', error);
+            document.getElementById('sourceInstance').innerHTML = '<option value="">加载失败</option>';
+        }
+    }
+    
+    // 处理创建快照
+    async function handleCreateSnapshot(event) {
+        event.preventDefault();
+        
+        const formData = new FormData(event.target);
+        const snapshotType = formData.get('snapshotType');
+        
+        // 验证必填字段
+        const name = formData.get('name').trim();
+        if (!name) {
+            showAlert('请输入快照名称', 'warning');
+            return;
+        }
+        
+        if (snapshotType === 'volume') {
+            const volumeId = formData.get('volume_id');
+            if (!volumeId) {
+                showAlert('请选择源卷', 'warning');
+                return;
+            }
+        } else {
+            const instanceId = formData.get('instance_id');
+            if (!instanceId) {
+                showAlert('请选择源实例', 'warning');
+                return;
+            }
+        }
+        
+        // 禁用提交按钮，防止重复提交
+        const submitBtn = document.getElementById('createSnapshotBtn');
+        const originalBtnContent = submitBtn.innerHTML;
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>创建中...';
+        
+        try {
+            // 构建请求数据
+            const requestData = {
+                name: name,
+                type: snapshotType
+            };
+            
+            // 添加描述（如果有）
+            const description = formData.get('description').trim();
+            if (description) {
+                requestData.description = description;
+            }
+            
+            if (snapshotType === 'volume') {
+                requestData.volume_id = formData.get('volume_id');
+                requestData.force = formData.get('force') === 'on';
+            } else {
+                requestData.instance_id = formData.get('instance_id');
+                // 可以添加元数据
+                requestData.metadata = {};
+            }
+            
+            // 显示进度模态框
+            showCreateProgress(name, snapshotType);
+            
+            // 关闭创建模态框
+            const createModal = bootstrap.Modal.getInstance(document.getElementById('createSnapshotModal'));
+            createModal.hide();
+            
+            // 发送创建请求
+            const response = await fetch(`/api/snapshots/create?cluster_id=${currentClusterId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                completeCreateProgress(true, '快照创建任务已提交成功');
+                // 延迟刷新列表，给OpenStack时间处理
+                setTimeout(() => {
+                    loadSnapshots();
+                    loadSnapshotStatistics();
+                }, 2000);
+            } else {
+                completeCreateProgress(false, '创建失败: ' + data.error);
+            }
+            
+        } catch (error) {
+            console.error('Error creating snapshot:', error);
+            completeCreateProgress(false, '创建快照时发生错误: ' + error.message);
+        } finally {
+            // 重置提交按钮
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalBtnContent;
+        }
+    }
+    
+    // 显示创建进度
+    function showCreateProgress(snapshotName, snapshotType) {
+        const typeText = snapshotType === 'volume' ? '卷快照' : '实例快照';
+        const progressText = document.getElementById('createProgressText');
+        const progressStatus = document.getElementById('createProgressStatus');
+        const completeBtn = document.getElementById('createCompleteBtn');
+        
+        progressText.textContent = `正在创建${typeText} "${snapshotName}"，请稍候...`;
+        progressStatus.className = 'alert alert-info mb-0';
+        progressStatus.querySelector('i').className = 'fas fa-spinner fa-spin me-2';
+        completeBtn.style.display = 'none';
+        
+        // 显示进度模态框
+        const progressModal = new bootstrap.Modal(document.getElementById('createProgressModal'));
+        progressModal.show();
+    }
+    
+    // 完成创建进度
+    function completeCreateProgress(success, message) {
+        const progressText = document.getElementById('createProgressText');
+        const progressStatus = document.getElementById('createProgressStatus');
+        const completeBtn = document.getElementById('createCompleteBtn');
+        const spinner = document.querySelector('#createProgressModal .spinner-border');
+        
+        // 停止转圈动画
+        if (spinner) {
+            spinner.style.display = 'none';
+        }
+        
+        if (success) {
+            progressStatus.className = 'alert alert-success mb-0';
+            progressStatus.querySelector('i').className = 'fas fa-check-circle me-2';
+            progressText.textContent = message;
+        } else {
+            progressStatus.className = 'alert alert-danger mb-0';
+            progressStatus.querySelector('i').className = 'fas fa-exclamation-triangle me-2';
+            progressText.textContent = message;
+        }
+        
+        // 显示完成按钮
+        completeBtn.style.display = 'inline-block';
+        
+        // 显示全局提示
+        showAlert(message, success ? 'success' : 'danger');
+    }
+    
+    // 关闭创建进度模态框
+    function closeCreateProgressModal() {
+        const modal = bootstrap.Modal.getInstance(document.getElementById('createProgressModal'));
+        if (modal) {
+            modal.hide();
+        }
     }
 
+    // 刷新快照列表
     function refreshSnapshots() {
-        showAlert('刷新功能开发中...', 'info');
+        if (!currentClusterId) {
+            showAlert('请先选择一个集群', 'warning');
+            return;
+        }
+        
+        currentPage = 1;
+        loadSnapshots();
+        loadSnapshotStatistics();
     }
 </script>
 {% endblock %}

@@ -2,50 +2,79 @@
 
 {% block title %}实例管理 - {{ super() }}{% endblock %}
 
-{% block extra_css %}
+{% block page_header %}
+<h1 class="page-title">
+    <i class="fas fa-desktop"></i>
+    实例管理
+</h1>
+<div class="btn-toolbar mb-2 mb-md-0">
+    <div class="btn-group me-2" id="batchOperationBtn" style="display: none;">
+        <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
+            <i class="fas fa-list me-1"></i>批量操作
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="#" onclick="batchOperation('start')">
+                <i class="fas fa-play text-success me-2"></i>批量启动
+            </a></li>
+            <li><a class="dropdown-item" href="#" onclick="batchOperation('stop')">
+                <i class="fas fa-stop text-danger me-2"></i>批量停止
+            </a></li>
+            <li><a class="dropdown-item" href="#" onclick="batchOperation('restart')">
+                <i class="fas fa-redo text-warning me-2"></i>批量重启
+            </a></li>
+        </ul>
+    </div>
+    <div class="btn-group me-2" id="exportBtn" style="display: none;">
+        <button type="button" class="btn btn-outline-success dropdown-toggle" data-bs-toggle="dropdown">
+            <i class="fas fa-download me-1"></i>导出
+        </button>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="#" onclick="exportData('excel')">
+                <i class="fas fa-file-excel text-success me-2"></i>导出Excel
+            </a></li>
+            <li><a class="dropdown-item" href="#" onclick="exportData('csv')">
+                <i class="fas fa-file-csv text-info me-2"></i>导出CSV
+            </a></li>
+        </ul>
+    </div>
+    <button type="button" class="btn btn-primary" onclick="window.location.href='{{ url_for('main.create_instance') }}'">
+        <i class="fas fa-plus me-1"></i>创建实例
+    </button>
+</div>
+{% endblock %}
+
+{% block extra_head %}
 <style>
     .instance-card {
-        transition: transform 0.2s;
-        border-left: 4px solid #dee2e6;
+        border-left: 4px solid var(--bs-border-color);
     }
-    .instance-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    .instance-card.status-ACTIVE {
+        border-left-color: var(--bs-success);
     }
-    .instance-card.status-active {
-        border-left-color: #28a745;
+    .instance-card.status-SHUTOFF {
+        border-left-color: var(--bs-danger);
     }
-    .instance-card.status-shutoff {
-        border-left-color: #dc3545;
+    .instance-card.status-SUSPENDED {
+        border-left-color: var(--bs-warning);
     }
-    .instance-card.status-suspended {
-        border-left-color: #ffc107;
+    .instance-card.status-PAUSED {
+        border-left-color: var(--bs-info);
     }
-    .instance-card.status-paused {
-        border-left-color: #17a2b8;
-    }
-    .status-badge {
-        font-size: 0.8rem;
-        padding: 0.25em 0.5em;
+    .instance-card.status-BUILD {
+        border-left-color: var(--bs-info);
     }
     .instance-actions {
         opacity: 0;
-        transition: opacity 0.3s;
+        transition: opacity 0.2s ease;
     }
     .instance-card:hover .instance-actions {
         opacity: 1;
     }
     .stats-overview {
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
     }
     .loading-spinner {
         display: none;
-    }
-    .filter-section {
-        background: #f8f9fa;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin-bottom: 1.5rem;
     }
     .instance-ip {
         font-size: 0.85rem;

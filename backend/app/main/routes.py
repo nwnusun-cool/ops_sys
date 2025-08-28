@@ -87,6 +87,12 @@ def snapshots():
     """快照管理页面"""
     return render_template('snapshots/index.html')
 
+@main_bp.route('/images')
+@login_required
+def images():
+    """镜像管理页面"""
+    return render_template('images/index.html')
+
 @main_bp.route('/api/stats')
 @login_required
 def api_stats():
