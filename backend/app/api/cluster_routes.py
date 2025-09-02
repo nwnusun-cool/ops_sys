@@ -267,9 +267,33 @@ def get_cluster_resources(cluster_id):
             nova_client = clients['nova']
             cinder_client = clients['cinder']
             
-            # 获取统计数据
+            # 获取基础数据
             instances = nova_client.servers.list()
             volumes = cinder_client.volumes.list()
+            
+            # 尝试获取其他资源
+            snapshots = []
+            networks = []
+            images = []
+            
+            try:
+                snapshots = cinder_client.volume_snapshots.list()
+            except Exception as e:
+                logger.warning(f"Failed to get snapshots: {str(e)}")
+                
+            try:
+                neutron_client = clients.get('neutron')
+                if neutron_client:
+                    networks = neutron_client.list_networks()['networks']
+            except Exception as e:
+                logger.warning(f"Failed to get networks: {str(e)}")
+                
+            try:
+                glance_client = clients.get('glance')
+                if glance_client:
+                    images = list(glance_client.images.list())
+            except Exception as e:
+                logger.warning(f"Failed to get images: {str(e)}")
             
             # 按状态统计实例
             instance_stats = {}
@@ -285,24 +309,63 @@ def get_cluster_resources(cluster_id):
                 volume_stats[status] = volume_stats.get(status, 0) + 1
                 volume_size_total += volume.size
             
+            # 统计快照
+            snapshot_stats = {}
+            snapshot_size_total = 0
+            for snapshot in snapshots:
+                status = snapshot.status
+                snapshot_stats[status] = snapshot_stats.get(status, 0) + 1
+                snapshot_size_total += getattr(snapshot, 'size', 0)
+            
+            # 统计镜像
+            image_stats = {}
+            image_size_total = 0
+            for image in images:
+                status = image.status
+                image_stats[status] = image_stats.get(status, 0) + 1
+                size_bytes = getattr(image, 'size', 0) or 0
+                image_size_total += size_bytes / (1024 * 1024 * 1024)  # 转换为GB
+            
+            # 统计网络
+            network_stats = {
+                'total': len(networks),
+                'external': sum(1 for net in networks if net.get('router:external', False)),
+                'internal': sum(1 for net in networks if not net.get('router:external', False))
+            }
+            
             # 更新集群资源计数
             cluster.update_resource_counts(
                 instances=len(instances),
-                volumes=len(volumes)
+                volumes=len(volumes),
+                networks=len(networks)
             )
             
             return jsonify({
                 'success': True,
                 'data': {
                     'cluster_name': cluster.name,
+                    'cluster_id': cluster.id,
                     'summary': {
                         'instances': len(instances),
                         'volumes': len(volumes),
-                        'total_volume_size': volume_size_total
+                        'snapshots': len(snapshots),
+                        'networks': len(networks),
+                        'images': len(images),
+                        'total_volume_size': volume_size_total,
+                        'total_snapshot_size': snapshot_size_total,
+                        'total_image_size': image_size_total
                     },
-                    'instance_stats': instance_stats,
-                    'volume_stats': volume_stats,
-                    'last_updated': datetime.utcnow().isoformat()
+                    'statistics': {
+                        'instance_stats': instance_stats,
+                        'volume_stats': volume_stats,
+                        'snapshot_stats': snapshot_stats,
+                        'image_stats': image_stats,
+                        'network_stats': network_stats
+                    },
+                    'connection_status': cluster.connection_status,
+                    'last_connection_test': cluster.last_connection_test.isoformat() if cluster.last_connection_test else None,
+                    'last_updated': datetime.utcnow().isoformat(),
+                    'error_message': cluster.error_message
                 }
             })
             
@@ -312,14 +375,28 @@ def get_cluster_resources(cluster_id):
                 'success': True,
                 'data': {
                     'cluster_name': cluster.name,
+                    'cluster_id': cluster.id,
                     'summary': {
-                        'instances': cluster.instance_count,
-                        'volumes': cluster.volume_count,
-                        'total_volume_size': 0
+                        'instances': cluster.instance_count or 0,
+                        'volumes': cluster.volume_count or 0,
+                        'snapshots': 0,
+                        'networks': cluster.network_count or 0,
+                        'images': 0,
+                        'total_volume_size': 0,
+                        'total_snapshot_size': 0,
+                        'total_image_size': 0
                     },
-                    'instance_stats': {},
-                    'volume_stats': {},
+                    'statistics': {
+                        'instance_stats': {},
+                        'volume_stats': {},
+                        'snapshot_stats': {},
+                        'image_stats': {},
+                        'network_stats': {}
+                    },
+                    'connection_status': cluster.connection_status,
+                    'last_connection_test': cluster.last_connection_test.isoformat() if cluster.last_connection_test else None,
                     'last_updated': cluster.updated_at.isoformat() if cluster.updated_at else None,
+                    'error_message': cluster.error_message,
                     'note': '无法连接到集群，显示缓存数据'
                 }
             })

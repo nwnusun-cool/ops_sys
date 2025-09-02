@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}工作负载管理 - Kubernetes{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/workloads-kubesphere.css') }}?v=1.0">
+{% endblock %}
+
+{% block content %}
+<!-- 工作负载管理页面 - KubeSphere风格 -->
+<div class="page-wrapper">
+  <!-- 面包屑导航 -->
+  <div class="breadcrumb-section">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('main.index') }}"><i class="fas fa-dharmachakra"></i> Kubernetes</a>
+        </li>
+        <li class="breadcrumb-item active">工作负载</li>
+      </ol>
+    </nav>
+  </div>
+
+  <!-- 页面标题和统计 -->
+  <div class="page-header">
+    <div class="page-title-section">
+      <h1 class="page-title">
+        <i class="fas fa-tasks text-primary"></i>
+        工作负载管理
+      </h1>
+      <p class="page-description">管理Kubernetes集群中的Deployments、DaemonSets、StatefulSets等工作负载</p>
+    </div>
+    
+    <!-- 统计卡片 -->
+    <div class="stats-cards-row">
+      <div class="stat-card stat-card-success">
+        <div class="stat-card-content">
+          <div class="stat-number" id="deploymentCount">0</div>
+          <div class="stat-label">Deployments</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-rocket"></i>
+        </div>
+      </div>
+      
+      <div class="stat-card stat-card-info">
+        <div class="stat-card-content">
+          <div class="stat-number" id="replicasetCount">0</div>
+          <div class="stat-label">ReplicaSets</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-clone"></i>
+        </div>
+      </div>
+      
+      <div class="stat-card stat-card-warning">
+        <div class="stat-card-content">
+          <div class="stat-number" id="statefulsetCount">0</div>
+          <div class="stat-label">StatefulSets</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-database"></i>
+        </div>
+      </div>
+      
+      <div class="stat-card stat-card-danger">
+        <div class="stat-card-content">
+          <div class="stat-number" id="daemonsetCount">0</div>
+          <div class="stat-label">DaemonSets</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-layer-group"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 工具栏 -->
+  <div class="toolbar-section">
+    <div class="toolbar-left">
+      <!-- 集群选择器 -->
+      <div class="cluster-selector">
+        <select class="form-select form-select-sm" id="cluster-filter">
+          <option value="">选择集群...</option>
+        </select>
+      </div>
+      
+      <!-- 工作负载类型过滤 -->
+      <div class="filter-item">
+        <select class="form-select form-select-sm" id="workload-type-filter">
+          <option value="">所有类型</option>
+          <option value="deployment">Deployments</option>
+          <option value="replicaset">ReplicaSets</option>
+          <option value="daemonset">DaemonSets</option>
+          <option value="statefulset">StatefulSets</option>
+          <option value="job">Jobs</option>
+          <option value="cronjob">CronJobs</option>
+        </select>
+      </div>
+      
+      <div class="filter-item">
+        <select class="form-select form-select-sm" id="namespace-filter">
+          <option value="">所有命名空间</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="toolbar-right">
+      <!-- 搜索框 -->
+      <div class="search-box">
+        <input type="text" class="form-control form-control-sm" id="workload-search" 
+               placeholder="搜索工作负载名称...">
+        <i class="fas fa-search search-icon"></i>
+      </div>
+      
+      <!-- 视图切换 -->
+      <div class="view-toggle">
+        <div class="btn-group btn-group-sm" role="group">
+          <input type="radio" class="btn-check" name="view-mode" id="card-view" checked>
+          <label class="btn btn-outline-secondary" for="card-view">
+            <i class="fas fa-th"></i>
+          </label>
+          
+          <input type="radio" class="btn-check" name="view-mode" id="list-view">
+          <label class="btn btn-outline-secondary" for="list-view">
+            <i class="fas fa-list"></i>
+          </label>
+        </div>
+      </div>
+      
+      <!-- 刷新按钮 -->
+      <button class="btn btn-sm btn-outline-primary" id="refresh-btn">
+        <i class="fas fa-sync-alt"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- 卡片视图 -->
+  <div class="content-section" id="card-view-content">
+    <div class="workloads-cards-container" id="workloads-cards-container">
+      <!-- 工作负载卡片将通过JavaScript动态生成 -->
+    </div>
+  </div>
+
+  <!-- 列表视图 -->
+  <div class="content-section" id="list-view-content" style="display: none;">
+    <div class="table-container">
+      <table class="table table-hover workloads-table" id="workloads-table">
+        <thead>
+          <tr>
+            <th width="50">类型</th>
+            <th>名称</th>
+            <th>命名空间</th>
+            <th>副本状态</th>
+            <th>创建时间</th>
+            <th width="120">操作</th>
+          </tr>
+        </thead>
+        <tbody id="workloads-table-body">
+          <!-- 工作负载行将通过JavaScript动态生成 -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 分页 -->
+  <div class="pagination-section" id="pagination-section" style="display: none;">
+    <div class="pagination-info">
+      显示 <span id="items-range">0-0</span> / <span id="total-items">0</span> 个工作负载
+    </div>
+    <nav aria-label="分页">
+      <ul class="pagination pagination-sm" id="pagination-controls">
+      </ul>
+    </nav>
+  </div>
+</div>
+
+<!-- 工作负载详情侧滑面板 -->
+<div class="detail-panel" id="workload-detail-panel">
+  <div class="detail-panel-header">
+    <h5 class="detail-panel-title">
+      <i class="fas fa-tasks"></i>
+      <span id="detail-workload-name">工作负载详情</span>
+    </h5>
+    <button class="btn-close" id="close-detail-panel"></button>
+  </div>
+  
+  <div class="detail-panel-content">
+    <!-- 详情内容将通过JavaScript动态生成 -->
+  </div>
+</div>
+
+<!-- 扩缩容模态框 -->
+<div class="modal fade" id="scale-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-expand-arrows-alt me-2"></i>扩缩容工作负载
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label for="current-replicas" class="form-label">当前副本数</label>
+          <input type="text" class="form-control" id="current-replicas" readonly>
+        </div>
+        <div class="mb-3">
+          <label for="target-replicas" class="form-label">目标副本数</label>
+          <input type="number" class="form-control" id="target-replicas" min="0" max="100">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="confirm-scale-btn">确认扩缩容</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- K8s状态管理器 -->
+<script src="{{ url_for('static', filename='js/k8s-state-manager.js') }}"></script>
+<script src="{{ url_for('static', filename='js/workloads-manager.js') }}?v=1.0"></script>
+{% endblock %}

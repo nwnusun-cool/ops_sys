@@ -1,0 +1,793 @@
+{% extends "base.html" %}
+
+{% block title %}K8s集群管理 - {{ super() }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .cluster-card {
+        transition: transform 0.2s;
+        border: 1px solid #dee2e6;
+        border-radius: 0.5rem;
+    }
+    .cluster-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .status-badge {
+        font-size: 0.8rem;
+    }
+    .connection-test-btn {
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    .cluster-card:hover .connection-test-btn {
+        opacity: 1;
+    }
+    .resource-stats {
+        font-size: 0.85rem;
+    }
+    .cluster-actions {
+        opacity: 0;
+        transition: opacity 0.3s;
+    }
+    .cluster-card:hover .cluster-actions {
+        opacity: 1;
+    }
+    .stats-overview {
+        margin-bottom: 2rem;
+    }
+    .loading-spinner {
+        display: none;
+    }
+    
+
+    .version-tag {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        border-radius: 3px;
+        background: #17a2b8;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block page_header %}
+<h1 class="h2">
+    <i class="fas fa-dharmachakra me-2"></i>K8s集群管理
+</h1>
+<div class="btn-toolbar mb-2 mb-md-0">
+    {% if current_user.has_role(['super_admin', 'admin']) %}
+    <div class="btn-group me-2">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addK8sClusterModal">
+            <i class="fas fa-plus me-1"></i>添加K8s集群
+        </button>
+    </div>
+    {% endif %}
+    <div class="btn-group">
+        <button type="button" class="btn btn-outline-secondary" onclick="refreshAllK8sClusters()">
+            <i class="fas fa-sync-alt me-1"></i>刷新状态
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+
+<!-- 加载指示器 -->
+<div id="loadingIndicator" class="text-center py-4 loading-spinner">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">加载中...</span>
+    </div>
+    <p class="mt-2 text-muted">正在加载K8s集群信息...</p>
+</div>
+
+<!-- K8s集群状态概览 -->
+<div class="stats-overview">
+    <div class="row" id="statsOverview">
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">总集群数</h5>
+                    <h2 class="mb-0" id="totalK8sClusters">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">已连接</h5>
+                    <h2 class="mb-0" id="connectedK8sClusters">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">连接失败</h5>
+                    <h2 class="mb-0" id="failedK8sClusters">-</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">未知状态</h5>
+                    <h2 class="mb-0" id="unknownK8sClusters">-</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- K8s集群列表 -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <i class="fas fa-list me-2"></i>K8s集群列表
+        </h5>
+    </div>
+    <div class="card-body">
+        <div id="k8sClustersContainer" class="row">
+            <!-- K8s集群卡片将通过JavaScript动态加载 -->
+        </div>
+    </div>
+</div>
+
+<!-- 分页 -->
+<nav class="mt-4" id="paginationContainer" style="display: none;">
+    <ul class="pagination justify-content-center" id="pagination">
+    </ul>
+</nav>
+
+<!-- 添加K8s集群模态框 -->
+{% if current_user.has_role(['super_admin', 'admin']) %}
+<div class="modal fade" id="addK8sClusterModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">添加K8s集群</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addK8sClusterForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">集群名称 *</label>
+                                <input type="text" class="form-control" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">API Server地址 *</label>
+                                <input type="text" class="form-control" name="api_server" required 
+                                       placeholder="https://k8s-api.example.com:6443">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" name="description" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">认证类型</label>
+                        <select class="form-select" name="auth_type">
+                            <option value="kubeconfig">Kubeconfig</option>
+                            <option value="token">Token</option>
+                            <option value="cert">Certificate</option>
+                        </select>
+                    </div>
+                    
+                    <hr>
+                    <h6>Kubeconfig配置</h6>
+                    <p class="text-muted small">请粘贴完整的kubeconfig内容，支持YAML或JSON格式</p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Kubeconfig内容 *</label>
+                        <textarea class="form-control" name="kubeconfig" rows="8" required 
+                                  placeholder="apiVersion: v1
+clusters:
+- cluster:
+    certificate-authority-data: ...
+    server: https://k8s-api.example.com:6443
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    user: admin
+  name: admin@kubernetes
+current-context: admin@kubernetes
+kind: Config
+preferences: {}
+users:
+- name: admin
+  user:
+    client-certificate-data: ...
+    client-key-data: ..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="createK8sCluster()">创建K8s集群</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑K8s集群模态框 -->
+<div class="modal fade" id="editK8sClusterModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑K8s集群</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editK8sClusterForm">
+                    <input type="hidden" id="editK8sClusterId">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">集群名称 *</label>
+                                <input type="text" class="form-control" id="editK8sClusterName" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">API Server地址 *</label>
+                                <input type="text" class="form-control" id="editK8sClusterApiServer" name="api_server" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" id="editK8sClusterDescription" name="description" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">认证类型</label>
+                        <select class="form-select" id="editK8sClusterAuthType" name="auth_type">
+                            <option value="kubeconfig">Kubeconfig</option>
+                            <option value="token">Token</option>
+                            <option value="cert">Certificate</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="editK8sClusterActive" name="is_active">
+                        <label class="form-check-label" for="editK8sClusterActive">启用集群</label>
+                    </div>
+                    
+                    <hr>
+                    <h6>Kubeconfig配置 <small class="text-muted">(留空则保持不变)</small></h6>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Kubeconfig内容</label>
+                        <textarea class="form-control" id="editK8sClusterKubeconfig" name="kubeconfig" rows="8"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="updateK8sCluster()">更新K8s集群</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- 删除确认模态框 -->
+{% if current_user.has_role(['super_admin', 'admin']) %}
+<div class="modal fade" id="deleteK8sClusterModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>删除K8s集群
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3">您确定要删除K8s集群 <strong id="deleteK8sClusterName"></strong> 吗？</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    此操作不可逆，请谨慎操作。
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" onclick="confirmDeleteK8sCluster()">确认删除</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- K8s集群概览信息模态框 -->
+<div class="modal fade" id="k8sClusterOverviewModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-dharmachakra me-2"></i>K8s集群概览
+                    <small class="text-muted ms-2" id="overviewClusterName"></small>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- 加载状态 -->
+                <div id="overviewLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2 text-muted">正在收集集群数据...</p>
+                </div>
+                
+                <!-- 概览内容 -->
+                <div id="overviewContent" style="display: none;">
+                    <!-- 集群基础信息 -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card border-info">
+                                <div class="card-header bg-info text-white">
+                                    <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>集群信息</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-6"><strong>版本:</strong></div>
+                                        <div class="col-6" id="clusterVersion">-</div>
+                                    </div>
+                                    <hr>
+                                    <div class="row">
+                                        <div class="col-6"><strong>状态:</strong></div>
+                                        <div class="col-6" id="clusterStatus">-</div>
+                                    </div>
+                                    <hr>
+                                    <div class="row">
+                                        <div class="col-6"><strong>API地址:</strong></div>
+                                        <div class="col-6" id="clusterApiServer">-</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-success">
+                                <div class="card-header bg-success text-white">
+                                    <h6 class="mb-0"><i class="fas fa-chart-pie me-2"></i>资源概览</h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row text-center">
+                                        <div class="col-3">
+                                            <div class="border rounded p-2">
+                                                <h4 class="text-primary mb-0" id="overviewNodeCount">-</h4>
+                                                <small>节点</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-3">
+                                            <div class="border rounded p-2">
+                                                <h4 class="text-success mb-0" id="overviewNamespaceCount">-</h4>
+                                                <small>命名空间</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-3">
+                                            <div class="border rounded p-2">
+                                                <h4 class="text-info mb-0" id="overviewPodCount">-</h4>
+                                                <small>Pod</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-3">
+                                            <div class="border rounded p-2">
+                                                <h4 class="text-warning mb-0" id="overviewServiceCount">-</h4>
+                                                <small>Service</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 详细统计 -->
+                    <div class="row">
+                        <!-- 节点统计 -->
+                        <div class="col-md-6 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="fas fa-server me-2"></i>节点状态</h6>
+                                </div>
+                                <div class="card-body" id="nodeStatsContent">
+                                    <p class="text-muted text-center">暂无数据</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Pod统计 -->
+                        <div class="col-md-6 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0"><i class="fas fa-cube me-2"></i>Pod状态分布</h6>
+                                </div>
+                                <div class="card-body" id="podStatsContent">
+                                    <p class="text-muted text-center">暂无数据</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 错误状态 -->
+                <div id="overviewError" style="display: none;" class="text-center py-4">
+                    <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                    <h5>无法获取集群数据</h5>
+                    <p class="text-muted" id="overviewErrorMessage">请检查集群连接状态</p>
+                    <button class="btn btn-outline-primary" onclick="retryLoadOverview()">
+                        <i class="fas fa-sync-alt me-1"></i>重试
+                    </button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" onclick="refreshOverview()">
+                    <i class="fas fa-sync-alt me-1"></i>刷新数据
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentPage = 1;
+    let currentK8sClusterId = null;
+    let isLoading = false;
+    let currentOverviewClusterId = null;
+
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        showLoading(true);
+        Promise.all([
+            loadK8sClusters(),
+            loadK8sClustersStatus()
+        ]).finally(() => {
+            showLoading(false);
+        });
+    });
+
+    function showLoading(show) {
+        const indicator = document.getElementById('loadingIndicator');
+        const content = document.getElementById('k8sClustersContainer').parentElement.parentElement;
+        const stats = document.getElementById('statsOverview');
+        
+        if (show) {
+            indicator.style.display = 'block';
+            content.style.opacity = '0.5';
+            stats.style.opacity = '0.5';
+        } else {
+            indicator.style.display = 'none';
+            content.style.opacity = '1';
+            stats.style.opacity = '1';
+        }
+        isLoading = show;
+    }
+
+    // 加载K8s集群列表
+    async function loadK8sClusters(page = 1) {
+        try {
+            const response = await fetch(`/api/k8s/clusters?page=${page}&per_page=6`);
+            const data = await response.json();
+            
+            if (data.success) {
+                renderK8sClusters(data.data);
+                renderPagination(data.pagination);
+                currentPage = page;
+            } else {
+                showAlert('加载K8s集群列表失败: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading K8s clusters:', error);
+            showAlert('网络错误，请检查连接', 'danger');
+        }
+    }
+
+    // 渲染K8s集群卡片
+    function renderK8sClusters(clusters) {
+        const container = document.getElementById('k8sClustersContainer');
+        
+        if (clusters.length === 0) {
+            container.innerHTML = `
+                <div class="col-12">
+                    <div class="text-center py-5 text-muted">
+                        <i class="fas fa-dharmachakra fa-3x mb-3"></i>
+                        <p>暂无K8s集群，点击"添加K8s集群"开始。</p>
+                    </div>
+                </div>
+            `;
+            return;
+        }
+
+        const hasAdminRole = {{ 'true' if current_user.has_role(['super_admin', 'admin']) else 'false' }};
+
+        container.innerHTML = clusters.map(cluster => `
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card cluster-card h-100" data-cluster-id="${cluster.id}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">
+                            <i class="fas fa-dharmachakra me-2"></i>
+                            ${cluster.name}
+                        </h6>
+                        <div class="cluster-actions">
+                            <button class="btn btn-sm btn-outline-primary connection-test-btn me-1" 
+                                    onclick="testK8sConnection(${cluster.id})" title="测试连接">
+                                <i class="fas fa-wifi"></i>
+                            </button>
+                            ${hasAdminRole ? `
+                            <div class="dropdown d-inline">
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="dropdown">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="editK8sCluster(${cluster.id})">
+                                        <i class="fas fa-edit me-2"></i>编辑
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="showK8sClusterOverview(${cluster.id})">
+                                        <i class="fas fa-chart-bar me-2"></i>集群概览
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="/k8s-namespaces?cluster_id=${cluster.id}">
+                                        <i class="fas fa-layer-group me-2"></i>命名空间管理
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item text-danger" href="#" onclick="deleteK8sCluster(${cluster.id}, '${cluster.name}')">
+                                        <i class="fas fa-trash me-2"></i>删除
+                                    </a></li>
+                                </ul>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-2">
+                            <span class="badge status-badge ${getK8sStatusClass(cluster.cluster_status)}">
+                                ${getK8sStatusText(cluster.cluster_status)}
+                            </span>
+                            ${cluster.k8s_version ? `<span class="version-tag ms-1">${cluster.k8s_version}</span>` : ''}
+                        </div>
+                        
+                        ${cluster.description ? `<p class="text-muted small mb-2">${cluster.description}</p>` : ''}
+                        
+                        <div class="resource-stats">
+                            <div class="row text-center">
+                                <div class="col-3">
+                                    <div class="text-primary">
+                                        <i class="fas fa-server"></i><br>
+                                        <strong>${cluster.node_count || 0}</strong><br>
+                                        <small>节点</small>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="text-success">
+                                        <i class="fas fa-cube"></i><br>
+                                        <strong>${cluster.pod_count || 0}</strong><br>
+                                        <small>Pod</small>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="text-info">
+                                        <i class="fas fa-project-diagram"></i><br>
+                                        <strong>${cluster.service_count || 0}</strong><br>
+                                        <small>Service</small>
+                                    </div>
+                                </div>
+                                <div class="col-3">
+                                    <div class="text-warning">
+                                        <i class="fas fa-layer-group"></i><br>
+                                        <strong>${cluster.namespace_count || 0}</strong><br>
+                                        <small>NS</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <hr>
+                        <small class="text-muted">
+                            <i class="fas fa-clock me-1"></i>
+                            ${cluster.last_connection_test ? 
+                                '测试: ' + formatTime(cluster.last_connection_test) : 
+                                '未测试连接'
+                            }
+                        </small>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    // 加载K8s集群状态概览
+    async function loadK8sClustersStatus() {
+        try {
+            const response = await fetch('/api/k8s/clusters/status');
+            const data = await response.json();
+            
+            if (data.success) {
+                const status = data.data;
+                document.getElementById('totalK8sClusters').textContent = status.total;
+                document.getElementById('connectedK8sClusters').textContent = status.connected;
+                document.getElementById('failedK8sClusters').textContent = status.failed;
+                document.getElementById('unknownK8sClusters').textContent = status.unknown;
+            }
+        } catch (error) {
+            console.error('Error loading K8s status:', error);
+        }
+    }
+
+    // 辅助函数
+    function getK8sStatusClass(status) {
+        const classes = {
+            'connected': 'bg-success',
+            'failed': 'bg-danger', 
+            'unknown': 'bg-secondary'
+        };
+        return classes[status] || 'bg-secondary';
+    }
+
+    function getK8sStatusText(status) {
+        const texts = {
+            'connected': '已连接',
+            'failed': '连接失败',
+            'unknown': '未知'
+        };
+        return texts[status] || '未知';
+    }
+
+    function formatTime(isoString) {
+        const date = new Date(isoString);
+        return date.toLocaleString('zh-CN');
+    }
+
+    // 测试K8s连接
+    async function testK8sConnection(clusterId) {
+        if (isLoading) return;
+        
+        const btn = event.target.closest('button');
+        const originalContent = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        btn.disabled = true;
+
+        try {
+            const response = await fetch(`/api/k8s/clusters/${clusterId}/test`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert(`连接测试成功: ${data.message}`, 'success');
+                setTimeout(() => {
+                    loadK8sClusters(currentPage);
+                    loadK8sClustersStatus();
+                }, 1000);
+            } else {
+                showAlert(`连接测试失败: ${data.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showAlert('测试连接时发生错误', 'danger');
+        } finally {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+        }
+    }
+
+    // 刷新所有K8s集群状态
+    function refreshAllK8sClusters() {
+        if (isLoading) return;
+        
+        showLoading(true);
+        Promise.all([
+            loadK8sClusters(currentPage),
+            loadK8sClustersStatus()
+        ]).finally(() => {
+            showLoading(false);
+            showAlert('已刷新K8s集群状态', 'info');
+        });
+    }
+
+    {% if current_user.has_role(['super_admin', 'admin']) %}
+    // 创建K8s集群
+    async function createK8sCluster() {
+        const form = document.getElementById('addK8sClusterForm');
+        const formData = new FormData(form);
+        
+        const clusterData = {
+            name: formData.get('name'),
+            description: formData.get('description'),
+            api_server: formData.get('api_server'),
+            auth_type: formData.get('auth_type'),
+            kubeconfig: formData.get('kubeconfig')
+        };
+
+        try {
+            const response = await fetch('/api/k8s/clusters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(clusterData)
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showAlert(data.message, 'success');
+                bootstrap.Modal.getInstance(document.getElementById('addK8sClusterModal')).hide();
+                form.reset();
+                loadK8sClusters();
+                loadK8sClustersStatus();
+            } else {
+                showAlert(data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showAlert('创建K8s集群时发生错误', 'danger');
+        }
+    }
+    {% endif %}
+
+    // 显示警告消息
+    function showAlert(message, type) {
+        const existingAlerts = document.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const content = document.querySelector('main');
+        content.insertBefore(alertDiv, content.firstChild);
+        
+        if (type !== 'info') {
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+    }
+
+    // 渲染分页
+    function renderPagination(pagination) {
+        const container = document.getElementById('paginationContainer');
+        const ul = document.getElementById('pagination');
+
+        if (pagination.pages <= 1) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+        ul.innerHTML = '';
+
+        // 上一页
+        if (pagination.has_prev) {
+            ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="loadK8sClusters(${pagination.page - 1})">上一页</a></li>`;
+        }
+
+        // 页码
+        for (let i = 1; i <= pagination.pages; i++) {
+            const active = i === pagination.page ? 'active' : '';
+            ul.innerHTML += `<li class="page-item ${active}"><a class="page-link" href="#" onclick="loadK8sClusters(${i})">${i}</a></li>`;
+        }
+
+        // 下一页
+        if (pagination.has_next) {
+            ul.innerHTML += `<li class="page-item"><a class="page-link" href="#" onclick="loadK8sClusters(${pagination.page + 1})">下一页</a></li>`;
+        }
+    }
+
+</script>
+{% endblock %}

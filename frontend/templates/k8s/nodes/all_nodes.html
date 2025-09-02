@@ -1,0 +1,495 @@
+{% extends "base.html" %}
+
+{% block title %}K8s集群节点概览{% endblock %}
+
+{% block extra_css %}
+<style>
+.cluster-section {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    overflow: hidden;
+}
+
+.cluster-header {
+    background: #f8f9fa;
+    padding: 1rem;
+    border-bottom: 1px solid #dee2e6;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.cluster-header:hover {
+    background: #e9ecef;
+}
+
+.cluster-body {
+    padding: 1rem;
+}
+
+.node-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+}
+
+.node-mini-card {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    padding: 0.75rem;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.node-mini-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    cursor: pointer;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+.status-ready { background: #28a745; }
+.status-notready { background: #dc3545; }
+.status-unknown { background: #6c757d; }
+
+.resource-mini-bar {
+    height: 4px;
+    background: #e9ecef;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 2px;
+}
+
+.collapsed {
+    display: none;
+}
+
+.cluster-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.stat-item {
+    text-align: center;
+    padding: 0.5rem;
+    background: white;
+    border: 1px solid #e3e6f0;
+    border-radius: 4px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- 页面标题 -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0">K8s集群节点概览</h1>
+            <p class="text-muted mb-0">查看所有K8s集群的节点状态</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-outline-primary btn-sm mr-2" onclick="refreshAllData()">
+                <i class="fas fa-sync-alt"></i> 全部刷新
+            </button>
+            <a href="/k8s-clusters" class="btn btn-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i> 返回K8s管理
+            </a>
+        </div>
+    </div>
+
+    <!-- 总览统计 -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                总集群数
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-clusters">-</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-layer-group fa-2x text-primary"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                总节点数
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-nodes">-</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-server fa-2x text-success"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-info shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                就绪节点
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="ready-nodes">-</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-check-circle fa-2x text-info"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-left-warning shadow h-100 py-2">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                总Pod数
+                            </div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-pods">-</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-cubes fa-2x text-warning"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 集群和节点列表 -->
+    <div id="clusters-container">
+        <!-- 集群节点信息将在这里动态加载 -->
+    </div>
+
+    <!-- 加载提示 -->
+    <div id="loading-section" class="text-center py-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="sr-only">加载中...</span>
+        </div>
+        <p class="mt-3 text-muted">正在加载集群和节点信息...</p>
+    </div>
+
+    <!-- 示例数据按钮 -->
+    <div id="demo-section" class="text-center py-5" style="display: none;">
+        <i class="fas fa-database fa-3x text-muted mb-3"></i>
+        <h5>暂无数据</h5>
+        <p class="text-muted">没有找到活跃的K8s集群或节点数据</p>
+        <button class="btn btn-primary" onclick="loadDemoData()">
+            <i class="fas fa-play"></i> 加载演示数据
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- K8s状态管理器 -->
+<script src="{{ url_for('static', filename='js/k8s-state-manager.js') }}"></script>
+<script>
+// 页面初始化
+$(document).ready(function() {
+    console.log('📱 K8s集群节点概览页面初始化');
+    loadAllClustersNodes();
+});
+
+// 加载所有集群的节点信息
+function loadAllClustersNodes() {
+    $('#loading-section').show();
+    $('#demo-section').hide();
+    
+    // 先获取所有集群
+    $.get('/api/k8s/clusters')
+        .done(function(response) {
+            console.log('✅ 集群列表响应:', response);
+            
+            if (response.success && response.data && response.data.length > 0) {
+                loadNodesForClusters(response.data);
+            } else {
+                $('#loading-section').hide();
+                $('#demo-section').show();
+            }
+        })
+        .fail(function(xhr) {
+            console.error('❌ 获取集群列表失败:', xhr.status, xhr.statusText);
+            $('#loading-section').hide();
+            
+            if (xhr.status === 401) {
+                showError('请先登录系统');
+            } else {
+                $('#demo-section').show();
+            }
+        });
+}
+
+// 为每个集群加载节点信息
+function loadNodesForClusters(clusters) {
+    let completedCount = 0;
+    let allNodesData = [];
+    
+    const clustersContainer = $('#clusters-container');
+    clustersContainer.empty();
+    
+    clusters.forEach(cluster => {
+        // 为每个集群获取节点信息
+        const nodePromise = $.get(`/api/k8s/clusters/${cluster.id}/nodes`)
+            .done(function(nodeResponse) {
+                console.log(`✅ 集群 ${cluster.name} 节点响应:`, nodeResponse);
+                
+                let nodes = [];
+                if (nodeResponse.success && nodeResponse.data) {
+                    nodes = nodeResponse.data;
+                }
+                
+                allNodesData = allNodesData.concat(nodes);
+                renderClusterSection(cluster, nodes);
+            })
+            .fail(function(xhr) {
+                console.warn(`⚠️ 集群 ${cluster.name} 节点获取失败:`, xhr.status);
+                // 即使失败也要渲染集群部分
+                renderClusterSection(cluster, []);
+            })
+            .always(function() {
+                completedCount++;
+                if (completedCount === clusters.length) {
+                    $('#loading-section').hide();
+                    updateOverallStats(clusters.length, allNodesData);
+                }
+            });
+    });
+    
+    // 如果没有集群，隐藏加载状态
+    if (clusters.length === 0) {
+        $('#loading-section').hide();
+        $('#demo-section').show();
+    }
+}
+
+// 渲染单个集群的节点部分
+function renderClusterSection(cluster, nodes) {
+    const readyNodes = nodes.filter(n => n.status === 'Ready').length;
+    const totalPods = nodes.reduce((sum, n) => sum + (n.pod_count || 0), 0);
+    
+    const clusterSection = $(`
+        <div class="cluster-section">
+            <div class="cluster-header" onclick="toggleCluster(${cluster.id})">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-1">
+                            <i class="fas fa-layer-group mr-2 text-primary"></i>${cluster.name}
+                            <small class="text-muted ml-2">${cluster.k8s_version || 'Unknown'}</small>
+                        </h5>
+                        <small class="text-muted">${cluster.api_server}</small>
+                    </div>
+                    <div class="text-right">
+                        <div class="cluster-stats">
+                            <div class="stat-item">
+                                <div class="text-primary font-weight-bold">${nodes.length}</div>
+                                <small class="text-muted">节点</small>
+                            </div>
+                            <div class="stat-item">
+                                <div class="text-success font-weight-bold">${readyNodes}</div>
+                                <small class="text-muted">就绪</small>
+                            </div>
+                            <div class="stat-item">
+                                <div class="text-warning font-weight-bold">${totalPods}</div>
+                                <small class="text-muted">Pod</small>
+                            </div>
+                        </div>
+                        <i class="fas fa-chevron-down" id="chevron-${cluster.id}"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="cluster-body" id="cluster-body-${cluster.id}">
+                ${renderNodesGrid(cluster.id, nodes)}
+            </div>
+        </div>
+    `);
+    
+    $('#clusters-container').append(clusterSection);
+}
+
+// 渲染节点网格
+function renderNodesGrid(clusterId, nodes) {
+    if (nodes.length === 0) {
+        return `
+            <div class="text-center py-4">
+                <i class="fas fa-info-circle fa-2x text-muted mb-2"></i>
+                <p class="text-muted">此集群暂无节点数据</p>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadClusterMockData(${clusterId})">
+                    <i class="fas fa-database"></i> 加载示例数据
+                </button>
+            </div>
+        `;
+    }
+    
+    let nodesHtml = '<div class="node-grid">';
+    
+    nodes.forEach(node => {
+        const statusClass = node.status === 'Ready' ? 'status-ready' : 
+                           node.status === 'NotReady' ? 'status-notready' : 'status-unknown';
+        
+        const cpuPercent = calculateUsagePercent(node.cpu_used || '0', node.capacity?.cpu || '0');
+        const memoryPercent = calculateUsagePercent(node.memory_used || '0', node.capacity?.memory || '0');
+        
+        nodesHtml += `
+            <div class="node-mini-card" onclick="goToNodeDetail(${clusterId}, '${node.name}')">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">
+                        <span class="status-indicator ${statusClass}"></span>
+                        ${node.name}
+                    </h6>
+                    <small class="text-muted">${Array.isArray(node.roles) ? node.roles.join(',') : node.roles || 'worker'}</small>
+                </div>
+                <div class="mb-1">
+                    <small class="text-muted">CPU: ${cpuPercent}%</small>
+                    <div class="resource-mini-bar">
+                        <div style="width: ${cpuPercent}%; height: 100%; background: #007bff;"></div>
+                    </div>
+                </div>
+                <div class="mb-1">
+                    <small class="text-muted">内存: ${memoryPercent}%</small>
+                    <div class="resource-mini-bar">
+                        <div style="width: ${memoryPercent}%; height: 100%; background: #28a745;"></div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <small class="text-muted">Pod: ${node.pod_count || 0}</small>
+                    <small class="text-muted">${node.version || 'Unknown'}</small>
+                </div>
+            </div>
+        `;
+    });
+    
+    nodesHtml += '</div>';
+    return nodesHtml;
+}
+
+// 计算使用百分比（复用之前的函数）
+function calculateUsagePercent(used, total) {
+    if (!used || !total) return 0;
+    
+    // 处理CPU (millicores)
+    if (typeof used === 'string' && used.includes('m')) {
+        used = parseInt(used.replace('m', ''));
+    }
+    if (typeof total === 'string' && total.includes('m')) {
+        total = parseInt(total.replace('m', ''));
+    } else if (typeof total === 'string' && !total.includes('m')) {
+        total = parseInt(total) * 1000; // 核心转换为millicores
+    }
+    
+    // 处理内存 (转换为MB)
+    if (typeof used === 'string' && used.includes('Mi')) {
+        used = parseInt(used.replace('Mi', ''));
+    }
+    if (typeof total === 'string' && total.includes('Mi')) {
+        total = parseInt(total.replace('Mi', ''));
+    } else if (typeof total === 'string' && total.includes('Gi')) {
+        total = parseInt(total.replace('Gi', '')) * 1024;
+    }
+    
+    const percent = (used / total) * 100;
+    return Math.min(Math.max(Math.round(percent), 0), 100);
+}
+
+// 更新总览统计
+function updateOverallStats(clusterCount, allNodes) {
+    const totalNodes = allNodes.length;
+    const readyNodes = allNodes.filter(n => n.status === 'Ready').length;
+    const totalPods = allNodes.reduce((sum, n) => sum + (n.pod_count || 0), 0);
+    
+    $('#total-clusters').text(clusterCount);
+    $('#total-nodes').text(totalNodes);
+    $('#ready-nodes').text(readyNodes);
+    $('#total-pods').text(totalPods);
+}
+
+// 切换集群展开/收起
+function toggleCluster(clusterId) {
+    const body = $(`#cluster-body-${clusterId}`);
+    const chevron = $(`#chevron-${clusterId}`);
+    
+    body.slideToggle();
+    chevron.toggleClass('fa-chevron-down fa-chevron-up');
+}
+
+// 跳转到节点详情
+function goToNodeDetail(clusterId, nodeName) {
+    window.open(`/k8s/clusters/${clusterId}/nodes`, '_blank');
+}
+
+// 刷新所有数据
+function refreshAllData() {
+    loadAllClustersNodes();
+}
+
+// 为单个集群加载Mock数据
+function loadClusterMockData(clusterId) {
+    const mockNodes = [
+        {
+            name: `cluster-${clusterId}-master-1`,
+            status: 'Ready',
+            roles: ['master'],
+            version: 'v1.21.0',
+            cpu_used: '800m',
+            memory_used: '2048Mi',
+            pod_count: 12,
+            capacity: { cpu: '4000m', memory: '8192Mi' }
+        },
+        {
+            name: `cluster-${clusterId}-worker-1`,
+            status: 'Ready',
+            roles: ['worker'],
+            version: 'v1.21.0',
+            cpu_used: '1200m',
+            memory_used: '3072Mi',
+            pod_count: 18,
+            capacity: { cpu: '4000m', memory: '8192Mi' }
+        }
+    ];
+    
+    // 更新对应集群的节点显示
+    $(`#cluster-body-${clusterId}`).html(renderNodesGrid(clusterId, mockNodes));
+}
+
+// 加载演示数据
+function loadDemoData() {
+    const demoClusters = [
+        { id: 1, name: 'Production Cluster', k8s_version: 'v1.21.0', api_server: 'https://prod-k8s.example.com' },
+        { id: 2, name: 'Staging Cluster', k8s_version: 'v1.20.5', api_server: 'https://staging-k8s.example.com' },
+        { id: 3, name: 'Development Cluster', k8s_version: 'v1.21.2', api_server: 'https://dev-k8s.example.com' }
+    ];
+    
+    $('#loading-section').show();
+    $('#demo-section').hide();
+    
+    setTimeout(() => {
+        loadNodesForClusters(demoClusters);
+    }, 1000);
+}
+
+function showError(message) {
+    alert('错误: ' + message);
+}
+</script>
+{% endblock %}

@@ -6,12 +6,14 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager
+from flask_socketio import SocketIO
 from config import config
 
 # 导入扩展实例
 from app.models.base import db
 migrate = Migrate()
 login_manager = LoginManager()
+socketio = SocketIO()
 
 def create_app(config_name=None):
     """应用工厂函数"""
@@ -29,6 +31,7 @@ def create_app(config_name=None):
     # 初始化扩展
     db.init_app(app)
     migrate.init_app(app, db)
+    socketio.init_app(app, cors_allowed_origins="*")
     
     # 配置登录管理器
     login_manager.init_app(app)
@@ -36,8 +39,23 @@ def create_app(config_name=None):
     login_manager.login_message = '请先登录以访问此页面。'
     login_manager.login_message_category = 'info'
     
+    # 对API请求返回JSON错误而不是重定向
+    @login_manager.unauthorized_handler
+    def unauthorized():
+        from flask import request, jsonify, redirect, url_for
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'success': False,
+                'error': '未登录或会话过期，请先登录',
+                'code': 401
+            }), 401
+        return redirect(url_for('auth.login'))
+    
     # 注册蓝图
     register_blueprints(app)
+    
+    # 初始化WebSocket处理器
+    register_websocket_handlers(app)
     
     # 注册错误处理器
     register_error_handlers(app)
@@ -64,6 +82,16 @@ def register_blueprints(app):
     # 主页蓝图
     from app.main import main_bp
     app.register_blueprint(main_bp)
+
+def register_websocket_handlers(app):
+    """注册WebSocket处理器"""
+    from app.websocket import PodTerminalHandler
+    
+    # 初始化Pod终端处理器
+    terminal_handler = PodTerminalHandler(socketio)
+    
+    # 在应用上下文中保存处理器引用
+    app.terminal_handler = terminal_handler
 
 def register_error_handlers(app):
     """注册错误处理器"""

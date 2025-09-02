@@ -6,6 +6,7 @@ from . import api_bp
 
 # 导入子模块路由
 from . import cluster_routes
+from . import k8s_routes
 from . import instance_routes
 from . import volume_routes
 from . import network_routes

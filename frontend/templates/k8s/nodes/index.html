@@ -1,0 +1,249 @@
+{% extends "base.html" %}
+
+{% block title %}节点管理 - Kubernetes{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/nodes-enhanced.css') }}?v=1.0">
+{% endblock %}
+
+{% block content %}
+<!-- 节点管理页面 - 增强版本 -->
+<div class="page-wrapper">
+  <!-- 面包屑导航 -->
+  <div class="breadcrumb-section">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('main.index') }}"><i class="fas fa-dharmachakra"></i> Kubernetes</a>
+        </li>
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('main.k8s_clusters') }}">集群管理</a>
+        </li>
+        <li class="breadcrumb-item active">节点管理</li>
+      </ol>
+    </nav>
+  </div>
+
+  <!-- 页面标题和统计 -->
+  <div class="page-header">
+    <div class="page-title-section">
+      <h1 class="page-title">
+        <i class="fas fa-server text-primary"></i>
+        节点管理
+      </h1>
+      <p class="page-description">管理Kubernetes集群中的工作节点</p>
+    </div>
+    
+    <!-- 统计卡片 -->
+    <div class="stats-cards-row">
+      <div class="stat-card stat-card-success">
+        <div class="stat-card-content">
+          <div class="stat-number" id="ready-nodes-count">0</div>
+          <div class="stat-label">就绪节点</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-check-circle"></i>
+        </div>
+      </div>
+      
+      <div class="stat-card stat-card-warning">
+        <div class="stat-card-content">
+          <div class="stat-number" id="not-ready-nodes-count">0</div>
+          <div class="stat-label">未就绪</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-exclamation-triangle"></i>
+        </div>
+      </div>
+      
+      <div class="stat-card stat-card-info">
+        <div class="stat-card-content">
+          <div class="stat-number" id="master-nodes-count">0</div>
+          <div class="stat-label">控制节点</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-crown"></i>
+        </div>
+      </div>
+      
+      <div class="stat-card stat-card-secondary">
+        <div class="stat-card-content">
+          <div class="stat-number" id="total-nodes-count">0</div>
+          <div class="stat-label">总节点数</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-servers"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 工具栏 -->
+  <div class="toolbar-section">
+    <div class="toolbar-left">
+      <!-- 批量操作 -->
+      <div class="batch-actions" id="batch-actions" style="display: none;">
+        <button class="btn btn-sm btn-outline-warning" id="batch-cordon-btn">
+          <i class="fas fa-ban"></i> 批量封锁
+        </button>
+        <button class="btn btn-sm btn-outline-success" id="batch-uncordon-btn">
+          <i class="fas fa-play"></i> 批量解封
+        </button>
+        <button class="btn btn-sm btn-outline-danger" id="batch-drain-btn">
+          <i class="fas fa-eject"></i> 批量驱逐
+        </button>
+        <span class="batch-info">已选择 <span id="selected-count">0</span> 个节点</span>
+      </div>
+    </div>
+    
+    <div class="toolbar-right">
+      <!-- 筛选器 -->
+      <div class="filters-group">
+        <div class="filter-item">
+          <select class="form-select form-select-sm" id="cluster-filter">
+            <option value="">选择集群...</option>
+          </select>
+        </div>
+        
+        <div class="filter-item">
+          <select class="form-select form-select-sm" id="status-filter">
+            <option value="">所有状态</option>
+            <option value="Ready">就绪</option>
+            <option value="NotReady">未就绪</option>
+            <option value="Unknown">未知</option>
+            <option value="SchedulingDisabled">调度禁用</option>
+          </select>
+        </div>
+        
+        <div class="filter-item">
+          <select class="form-select form-select-sm" id="role-filter">
+            <option value="">所有角色</option>
+            <option value="master">控制节点</option>
+            <option value="worker">工作节点</option>
+          </select>
+        </div>
+      </div>
+      
+      <!-- 搜索框 -->
+      <div class="search-box">
+        <input type="text" class="form-control form-control-sm" id="node-search" 
+               placeholder="搜索节点名称...">
+        <i class="fas fa-search search-icon"></i>
+      </div>
+      
+      <!-- 视图切换 -->
+      <div class="view-toggle">
+        <div class="btn-group btn-group-sm" role="group">
+          <input type="radio" class="btn-check" name="view-mode" id="table-view" checked>
+          <label class="btn btn-outline-secondary" for="table-view">
+            <i class="fas fa-list"></i>
+          </label>
+          
+          <input type="radio" class="btn-check" name="view-mode" id="card-view">
+          <label class="btn btn-outline-secondary" for="card-view">
+            <i class="fas fa-th"></i>
+          </label>
+        </div>
+      </div>
+      
+      <!-- 刷新按钮 -->
+      <button class="btn btn-sm btn-outline-primary" id="refresh-btn">
+        <i class="fas fa-sync-alt"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- 表格视图 -->
+  <div class="content-section" id="table-view-content">
+    <div class="table-container">
+      <table class="table table-hover nodes-table" id="nodes-table">
+        <thead>
+          <tr>
+            <th width="40">
+              <input type="checkbox" id="select-all-checkbox">
+            </th>
+            <th width="60">状态</th>
+            <th>节点名称</th>
+            <th>角色</th>
+            <th>版本</th>
+            <th>OS/内核</th>
+            <th>容器运行时</th>
+            <th>IP地址</th>
+            <th>CPU/内存</th>
+            <th>Pod数量</th>
+            <th>运行时间</th>
+            <th width="140">操作</th>
+          </tr>
+        </thead>
+        <tbody id="nodes-table-body">
+          <!-- 节点行将通过JavaScript动态生成 -->
+        </tbody>
+      </table>
+    </div>
+    
+    <!-- 分页 -->
+    <div class="pagination-section">
+      <div class="pagination-info">
+        显示 <span id="items-range">0-0</span> / <span id="total-items">0</span> 个节点
+      </div>
+      <nav aria-label="分页">
+        <ul class="pagination pagination-sm" id="pagination-controls">
+        </ul>
+      </nav>
+    </div>
+  </div>
+
+  <!-- 卡片视图 -->
+  <div class="content-section" id="card-view-content" style="display: none;">
+    <div class="cards-container" id="nodes-cards-container">
+      <!-- 节点卡片将通过JavaScript动态生成 -->
+    </div>
+  </div>
+</div>
+
+<!-- 节点详情模态框 -->
+<div class="modal fade" id="node-detail-modal" tabindex="-1">
+  <div class="modal-dialog modal-fullscreen">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title d-flex align-items-center">
+          <i class="fas fa-server me-2"></i>
+          <span id="detail-node-name">节点详情</span>
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="node-detail-modal-body">
+        <!-- 详情内容将通过JavaScript动态生成 -->
+        <div class="loading-container text-center p-5">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="mt-3">加载节点详情中...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 节点操作确认模态框 -->
+<div class="modal fade" id="node-action-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="action-modal-title">确认操作</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="action-modal-body">
+        <!-- 确认内容 -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-danger" id="confirm-action-btn">确认</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/k8s-state-manager.js') }}"></script>
+<script src="{{ url_for('static', filename='js/nodes-manager-enhanced.js') }}?v=1.0"></script>
+{% endblock %}

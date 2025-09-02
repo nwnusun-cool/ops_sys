@@ -8,7 +8,11 @@
       "Bash(curl:*)",
       "Bash(grep:*)",
       "WebFetch(domain:localhost)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(del debug_css.py)",
+      "Bash(del test_nodes_api.py test_nodes_display.html)",
+      "Bash(start:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": [],
