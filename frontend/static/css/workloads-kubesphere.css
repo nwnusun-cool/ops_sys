@@ -719,3 +719,338 @@ main.app-main .page-wrapper,
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* 自动刷新控制 */
+.refresh-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.refresh-controls button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 32px;
+  border-radius: 6px;
+  transition: all 0.3s ease;
+}
+
+.refresh-controls button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* 工作负载更新高亮效果 */
+.workload-updated {
+  animation: workloadUpdatePulse 2s ease-out;
+  border-color: #28a745 !important;
+}
+
+@keyframes workloadUpdatePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4);
+    background-color: rgba(40, 167, 69, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(40, 167, 69, 0.1);
+    background-color: rgba(40, 167, 69, 0.05);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+    background-color: transparent;
+  }
+}
+
+/* 新增操作按钮样式 */
+.action-btn.action-edit {
+  color: #007bff;
+}
+
+.action-btn.action-edit:hover {
+  background: rgba(0, 123, 255, 0.1);
+  color: #0056b3;
+}
+
+.action-btn.action-yaml {
+  color: #6c757d;
+}
+
+.action-btn.action-yaml:hover {
+  background: rgba(108, 117, 125, 0.1);
+  color: #495057;
+}
+
+.action-btn.action-recreate {
+  color: #ffc107;
+}
+
+.action-btn.action-recreate:hover {
+  background: rgba(255, 193, 7, 0.1);
+  color: #e0a800;
+}
+
+.action-btn.action-delete {
+  color: #dc3545;
+}
+
+.action-btn.action-delete:hover {
+  background: rgba(220, 53, 69, 0.1);
+  color: #b02a37;
+}
+
+/* YAML编辑器样式 */
+#yaml-editor {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 400px;
+}
+
+#yaml-editor:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+  background: white;
+}
+
+/* 平滑数据变更过渡 */
+.workload-card,
+.workloads-table tbody tr {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 数据更新时的微妙闪烁效果 */
+.data-updated {
+  animation: dataUpdateFlash 1s ease-out;
+}
+
+@keyframes dataUpdateFlash {
+  0% { background-color: rgba(40, 167, 69, 0.1); }
+  50% { background-color: rgba(40, 167, 69, 0.05); }
+  100% { background-color: transparent; }
+}
+
+/* 进度条动画 */
+.replica-progress-bar {
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 统计数字变化动画 */
+.stat-number {
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stat-number.updating {
+  animation: numberUpdate 0.6s ease-out;
+}
+
+@keyframes numberUpdate {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); color: #28a745; }
+  100% { transform: scale(1); }
+}
+
+/* 自动刷新状态指示器 */
+.refresh-controls button.btn-success {
+  position: relative;
+}
+
+.refresh-controls button.btn-success::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: #28a745;
+  border-radius: 50%;
+  border: 2px solid white;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(40, 167, 69, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(40, 167, 69, 0);
+  }
+}
+
+/* 工作负载状态样式 */
+.workload-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.workload-status-icon {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+}
+
+/* 状态颜色 */
+.workload-status.status-running {
+  background: rgba(40, 167, 69, 0.1);
+  color: #28a745;
+}
+
+.workload-status.status-running .workload-status-icon {
+  background: #28a745;
+}
+
+.workload-status.status-pending {
+  background: rgba(255, 193, 7, 0.1);
+  color: #ffc107;
+}
+
+.workload-status.status-pending .workload-status-icon {
+  background: #ffc107;
+}
+
+.workload-status.status-failed {
+  background: rgba(220, 53, 69, 0.1);
+  color: #dc3545;
+}
+
+.workload-status.status-failed .workload-status-icon {
+  background: #dc3545;
+}
+
+.workload-status.status-unknown {
+  background: rgba(108, 117, 125, 0.1);
+  color: #6c757d;
+}
+
+.workload-status.status-unknown .workload-status-icon {
+  background: #6c757d;
+}
+
+.workload-status.status-succeeded {
+  background: rgba(23, 162, 184, 0.1);
+  color: #17a2b8;
+}
+
+.workload-status.status-succeeded .workload-status-icon {
+  background: #17a2b8;
+}
+
+/* 动态更新状态 */
+.workload-status.status-updating,
+.workload-status.status-restarting,
+.workload-status.status-recreating {
+  background: rgba(111, 66, 193, 0.1);
+  color: #6f42c1;
+}
+
+.workload-status.status-updating .workload-status-icon,
+.workload-status.status-restarting .workload-status-icon,
+.workload-status.status-recreating .workload-status-icon {
+  background: #6f42c1;
+  animation: statusPulse 1.5s infinite;
+}
+
+@keyframes statusPulse {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 状态旋转动画 */
+.workload-status-icon.rotating {
+  animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 副本状态增强 */
+.replica-status-enhanced {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.replica-count {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.replica-count.healthy {
+  color: #28a745;
+}
+
+.replica-count.warning {
+  color: #ffc107;
+}
+
+.replica-count.error {
+  color: #dc3545;
+}
+
+/* 操作按钮状态 */
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.action-btn.processing {
+  position: relative;
+  color: transparent !important;
+}
+
+.action-btn.processing::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  border-top: 2px solid transparent;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* 工作负载行状态指示 */
+.workload-card.operation-in-progress,
+.workloads-table tbody tr.operation-in-progress {
+  border-left: 3px solid #6f42c1;
+  background: linear-gradient(90deg, rgba(111, 66, 193, 0.05) 0%, transparent 100%);
+}
+
+.workload-card.operation-in-progress::before {
+  background: #6f42c1;
+  animation: statusPulse 2s infinite;
+}

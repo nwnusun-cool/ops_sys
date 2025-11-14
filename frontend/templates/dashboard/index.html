@@ -2,6 +2,75 @@
 
 {% block title %}仪表盘 - {{ super() }}{% endblock %}
 
+{% block extra_head %}
+<style>
+.card-stats {
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.card-stats:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+}
+
+.feature-group {
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border: 1px solid #e9ecef;
+}
+
+.feature-group h6 {
+    border-bottom: 2px solid;
+    padding-bottom: 10px;
+    margin-bottom: 15px !important;
+}
+
+.btn-outline-muted {
+    color: #6c757d;
+    border-color: #6c757d;
+}
+
+.btn-outline-muted:hover {
+    color: #5a6268;
+    background-color: #6c757d;
+    border-color: #545b62;
+}
+
+.card-header h6 {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.border-left-primary {
+    border-left: 0.25rem solid #4e73df !important;
+}
+
+.border-left-success {
+    border-left: 0.25rem solid #1cc88a !important;
+}
+
+.border-left-info {
+    border-left: 0.25rem solid #36b9cc !important;
+}
+
+.border-left-warning {
+    border-left: 0.25rem solid #f6c23e !important;
+}
+
+.border-left-secondary {
+    border-left: 0.25rem solid #858796 !important;
+}
+
+@media (max-width: 768px) {
+    .col-xl-2 {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+}
+</style>
+{% endblock %}
+
 {% block page_header %}
 <h1 class="page-title">
     <i class="fas fa-tachometer-alt"></i>
@@ -26,12 +95,55 @@
 
 <!-- 统计卡片 -->
 <div class="row mb-4">
-    <div class="col-xl-3 col-md-6 mb-4">
+    <!-- OpenStack统计 -->
+    <div class="col-xl-2 col-md-4 mb-4">
         <div class="card border-left-primary shadow h-100 py-2 card-stats">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
                         <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            OpenStack集群
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ stats.active_clusters }}/{{ stats.total_clusters }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-cloud fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- K8s统计 -->
+    <div class="col-xl-2 col-md-4 mb-4">
+        <div class="card border-left-success shadow h-100 py-2 card-stats success">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            K8s集群
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">
+                            {{ stats.active_k8s_clusters }}/{{ stats.total_k8s_clusters }}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-dharmachakra fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 用户统计 -->
+    <div class="col-xl-2 col-md-4 mb-4">
+        <div class="card border-left-info shadow h-100 py-2 card-stats">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
                             用户总数
                         </div>
                         <div class="h5 mb-0 font-weight-bold text-gray-800">
@@ -46,52 +158,55 @@
         </div>
     </div>
 
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card border-left-success shadow h-100 py-2 card-stats success">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                            活跃集群
-                        </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">
-                            {{ stats.active_clusters }}
-                        </div>
-                    </div>
-                    <div class="col-auto">
-                        <i class="fas fa-server fa-2x text-gray-300"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card border-left-info shadow h-100 py-2 card-stats">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                            集群总数
-                        </div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">
-                            {{ stats.total_clusters }}
-                        </div>
-                    </div>
-                    <div class="col-auto">
-                        <i class="fas fa-cloud fa-2x text-gray-300"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6 mb-4">
+    <!-- 实例统计 -->
+    <div class="col-xl-2 col-md-4 mb-4">
         <div class="card border-left-warning shadow h-100 py-2 card-stats warning">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
                         <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            运行实例
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="running-instances">
+                            加载中...
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-desktop fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 存储统计 -->
+    <div class="col-xl-2 col-md-4 mb-4">
+        <div class="card border-left-secondary shadow h-100 py-2 card-stats">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-secondary text-uppercase mb-1">
+                            存储卷
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="total-volumes">
+                            加载中...
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-hdd fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 系统状态 -->
+    <div class="col-xl-2 col-md-4 mb-4">
+        <div class="card border-left-success shadow h-100 py-2 card-stats">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
                             系统状态
                         </div>
                         <div class="h5 mb-0 font-weight-bold text-gray-800">
@@ -100,6 +215,105 @@
                     </div>
                     <div class="col-auto">
                         <i class="fas fa-heartbeat fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 功能模块快捷入口 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">
+                    <i class="fas fa-rocket me-2"></i>功能模块
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- OpenStack模块 -->
+                    <div class="col-lg-6 mb-3">
+                        <div class="feature-group">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-cloud me-2"></i>OpenStack管理
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-6 mb-2">
+                                    <a href="{{ url_for('main.instances') }}" class="btn btn-outline-primary btn-sm w-100">
+                                        <i class="fas fa-desktop me-2"></i>实例管理
+                                    </a>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <a href="{{ url_for('main.volumes') }}" class="btn btn-outline-success btn-sm w-100">
+                                        <i class="fas fa-hdd me-2"></i>卷管理
+                                    </a>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <a href="{{ url_for('main.snapshots') }}" class="btn btn-outline-info btn-sm w-100">
+                                        <i class="fas fa-camera me-2"></i>快照管理
+                                    </a>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <a href="{{ url_for('main.images') }}" class="btn btn-outline-warning btn-sm w-100">
+                                        <i class="fas fa-compact-disc me-2"></i>镜像管理
+                                    </a>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <a href="{{ url_for('main.networks') }}" class="btn btn-outline-secondary btn-sm w-100">
+                                        <i class="fas fa-globe me-2"></i>网络管理
+                                    </a>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <a href="{{ url_for('main.network_topology') }}" class="btn btn-outline-dark btn-sm w-100">
+                                        <i class="fas fa-project-diagram me-2"></i>网络拓扑
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- K8s模块 -->
+                    <div class="col-lg-6 mb-3">
+                        <div class="feature-group">
+                            <h6 class="text-success mb-3">
+                                <i class="fas fa-dharmachakra me-2"></i>Kubernetes管理
+                            </h6>
+                            <div class="row">
+                                <div class="col-md-6 mb-2">
+                                    <a href="{{ url_for('main.k8s_clusters') }}" class="btn btn-outline-success btn-sm w-100">
+                                        <i class="fas fa-server me-2"></i>集群管理
+                                    </a>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <a href="{{ url_for('main.k8s_namespaces') }}" class="btn btn-outline-info btn-sm w-100">
+                                        <i class="fas fa-layer-group me-2"></i>命名空间
+                                    </a>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <a href="{{ url_for('main.k8s_pods') }}" class="btn btn-outline-warning btn-sm w-100">
+                                        <i class="fas fa-cube me-2"></i>Pod管理
+                                    </a>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <a href="{{ url_for('main.k8s_workloads') }}" class="btn btn-outline-primary btn-sm w-100">
+                                        <i class="fas fa-tasks me-2"></i>工作负载
+                                    </a>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <a href="{{ url_for('main.k8s_all_nodes') }}" class="btn btn-outline-secondary btn-sm w-100">
+                                        <i class="fas fa-network-wired me-2"></i>集群节点
+                                    </a>
+                                </div>
+                                <div class="col-md-6 mb-2">
+                                    <div class="btn btn-outline-muted btn-sm w-100 disabled">
+                                        <i class="fas fa-cogs me-2"></i>服务管理
+                                        <small class="d-block text-muted">即将推出</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -230,6 +444,16 @@
                     <a href="{{ url_for('auth.profile') }}" class="btn btn-outline-secondary">
                         <i class="fas fa-user-cog me-2"></i>个人设置
                     </a>
+                    
+                    {% if current_user.can_manage_clusters() %}
+                    <a href="{{ url_for('main.routers') }}" class="btn btn-outline-info">
+                        <i class="fas fa-route me-2"></i>路由管理
+                    </a>
+                    
+                    <a href="{{ url_for('main.security_groups') }}" class="btn btn-outline-warning">
+                        <i class="fas fa-shield-alt me-2"></i>安全组
+                    </a>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -244,10 +468,48 @@ function refreshStats() {
         .then(response => response.json())
         .then(data => {
             console.log('Stats refreshed:', data);
-            // 可以更新页面上的数据
+            loadResourceStats();
         })
         .catch(error => console.error('Error:', error));
 }
+
+function loadResourceStats() {
+    // 加载实例统计
+    fetch('/api/instances/stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('running-instances').textContent = 
+                    `${data.running}/${data.total}`;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading instance stats:', error);
+            document.getElementById('running-instances').textContent = '错误';
+        });
+    
+    // 加载卷统计
+    fetch('/api/volumes/stats')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('total-volumes').textContent = 
+                    `${data.in_use}/${data.total}`;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading volume stats:', error);
+            document.getElementById('total-volumes').textContent = '错误';
+        });
+}
+
+// 页面加载时自动获取统计数据
+document.addEventListener('DOMContentLoaded', function() {
+    loadResourceStats();
+    
+    // 每30秒刷新一次统计数据
+    setInterval(loadResourceStats, 30000);
+});
 
 function testConnection(clusterId) {
     const btn = event.target.closest('button');

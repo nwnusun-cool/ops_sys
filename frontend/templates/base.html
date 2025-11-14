@@ -17,13 +17,55 @@
     <!-- Custom Styles -->
     <link href="{{ url_for('static', filename='css/custom.css') }}" rel="stylesheet">
     
+    <!-- UI Improvements -->
+    <link href="{{ url_for('static', filename='css/ui-improvements.css') }}" rel="stylesheet">
+    
+    <!-- Mobile Responsive -->
+    <link href="{{ url_for('static', filename='css/mobile-responsive.css') }}" rel="stylesheet">
+    
+    <!-- Collapsible Sidebar -->
+    <link href="{{ url_for('static', filename='css/collapsible-sidebar.css') }}" rel="stylesheet">
+    
     {% block extra_head %}{% endblock %}
 </head>
 <body class="bg-light">
     <div class="app-container">
         <!-- 顶部导航栏 -->
         <header class="app-header">
-            <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+            <nav class="navbar navbar-expand-lg navbar-dark shadow-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <style>
+                    /* 确保导航栏文字清晰可见 */
+                    .navbar-dark .navbar-brand,
+                    .navbar-dark .nav-link {
+                        color: rgba(255, 255, 255, 0.95) !important;
+                        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                    }
+                    
+                    .navbar-dark .nav-link:hover {
+                        color: white !important;
+                    }
+                    
+                    .navbar-dark .dropdown-toggle::after {
+                        border-top-color: rgba(255, 255, 255, 0.95);
+                    }
+                    
+                    /* 用户菜单样式优化 */
+                    .navbar .dropdown-menu {
+                        margin-top: 0.5rem;
+                        border-radius: 8px;
+                        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15) !important;
+                    }
+                    
+                    .navbar .dropdown-item {
+                        padding: 0.5rem 1rem;
+                        transition: all 0.2s;
+                    }
+                    
+                    .navbar .dropdown-item:hover {
+                        background-color: #f3f4f6;
+                        padding-left: 1.25rem;
+                    }
+                </style>
                 <div class="container-fluid">
                     <!-- 品牌标识 -->
                     <a class="navbar-brand fw-bold" href="{{ url_for('main.dashboard') if current_user.is_authenticated else url_for('auth.login') }}">
@@ -74,159 +116,15 @@
         <div class="app-body">
             {% if current_user.is_authenticated %}
             <!-- 侧边栏 -->
-            <aside class="app-sidebar sidebar bg-white shadow-sm" id="sidebarNav">
-                <div class="sidebar-content">
-                    <ul class="nav flex-column">
-                        <!-- 仪表板 -->
-                        <li class="nav-item">
-                            <a class="nav-link {{ 'active' if request.endpoint == 'main.dashboard' }}" href="{{ url_for('main.dashboard') }}">
-                                <i class="fas fa-tachometer-alt me-2"></i>
-                                仪表板
-                            </a>
-                        </li>
-                        
-                        <!-- OpenStack集群管理 -->
-                        {% if current_user.can_manage_clusters() %}
-                        <li class="nav-item openstack-dropdown">
-                            <div class="nav-link openstack-dropdown-toggle {{ 'active-parent' if request.endpoint in ['main.clusters', 'main.instances', 'main.volumes', 'main.snapshots', 'main.images', 'main.network_topology', 'main.networks', 'main.routers', 'main.security_groups'] }}" id="openstackDropdown">
-                                <i class="fas fa-cloud me-2"></i>
-                                OpenStack管理
-                                <i class="fas fa-chevron-down ms-auto dropdown-arrow"></i>
-                            </div>
-                            <ul class="openstack-submenu">
-                                <li>
-                                    <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.clusters' }}" href="{{ url_for('main.clusters') }}">
-                                        <i class="fas fa-server me-2"></i>
-                                        集群管理
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.instances' }}" href="{{ url_for('main.instances') }}">
-                                        <i class="fas fa-desktop me-2"></i>
-                                        实例管理
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.volumes' }}" href="{{ url_for('main.volumes') }}">
-                                        <i class="fas fa-hdd me-2"></i>
-                                        卷管理
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.snapshots' }}" href="{{ url_for('main.snapshots') }}">
-                                        <i class="fas fa-camera me-2"></i>
-                                        快照管理
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.images' }}" href="{{ url_for('main.images') }}">
-                                        <i class="fas fa-compact-disc me-2"></i>
-                                        镜像管理
-                                    </a>
-                                </li>
-                                <li class="submenu-item">
-                                    <div class="nav-link submenu-toggle {{ 'active-parent' if request.endpoint in ['main.network_topology', 'main.networks', 'main.routers', 'main.security_groups'] }}">
-                                        <i class="fas fa-network-wired me-2"></i>
-                                        网络管理
-                                        <i class="fas fa-chevron-down ms-auto"></i>
-                                    </div>
-                                    <ul class="network-submenu-nested">
-                                        <li>
-                                            <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.network_topology' }}" href="{{ url_for('main.network_topology') }}">
-                                                <i class="fas fa-project-diagram me-2"></i>
-                                                网络拓扑
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.networks' }}" href="{{ url_for('main.networks') }}">
-                                                <i class="fas fa-globe me-2"></i>
-                                                网络管理
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.routers' }}" href="{{ url_for('main.routers') }}">
-                                                <i class="fas fa-route me-2"></i>
-                                                路由管理
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.security_groups' }}" href="{{ url_for('main.security_groups') }}">
-                                                <i class="fas fa-shield-alt me-2"></i>
-                                                安全组
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </li>
-                            </ul>
-                        </li>
-                        {% endif %}
-                        
-                        <!-- K8s集群管理 -->
-                        {% if current_user.can_manage_clusters() %}
-                        <li class="nav-item k8s-dropdown">
-                            <div class="nav-link k8s-dropdown-toggle {{ 'active-parent' if request.endpoint in ['main.k8s_clusters', 'main.k8s_namespaces', 'main.k8s_pods', 'main.k8s_workloads'] }}" id="k8sDropdown">
-                                <i class="fas fa-dharmachakra me-2"></i>
-                                K8s管理
-                                <i class="fas fa-chevron-down ms-auto dropdown-arrow"></i>
-                            </div>
-                            <ul class="k8s-submenu">
-                                <li>
-                                    <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.k8s_clusters' }}" href="{{ url_for('main.k8s_clusters') }}">
-                                        <i class="fas fa-server me-2"></i>
-                                        集群管理
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.k8s_namespaces' }}" href="{{ url_for('main.k8s_namespaces') }}">
-                                        <i class="fas fa-layer-group me-2"></i>
-                                        命名空间
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.k8s_pods' }}" href="{{ url_for('main.k8s_pods') }}">
-                                        <i class="fas fa-cube me-2"></i>
-                                        Pod管理
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.k8s_workloads' }}" href="{{ url_for('main.k8s_workloads') }}">
-                                        <i class="fas fa-tasks me-2"></i>
-                                        工作负载
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="nav-link submenu-link {{ 'active' if request.endpoint == 'main.k8s_all_nodes' }}" href="{{ url_for('main.k8s_all_nodes') }}">
-                                        <i class="fas fa-network-wired me-2"></i>
-                                        集群节点
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                        {% endif %}
-                        
-                        {% if current_user.can_manage_users() %}
-                        <!-- 分隔线 -->
-                        <li class="nav-item">
-                            <hr class="my-3">
-                        </li>
-                        
-                        <!-- 用户管理 -->
-                        <li class="nav-item">
-                            <a class="nav-link {{ 'active' if request.endpoint == 'admin.users' }}" href="{{ url_for('admin.users') }}">
-                                <i class="fas fa-users me-2"></i>
-                                用户管理
-                            </a>
-                        </li>
-                        {% endif %}
-                    </ul>
-                </div>
-            </aside>
-            
+            {% include 'components/collapsible-sidebar.html' %}
             {% endif %}
             
             <!-- 主内容区域 -->
             <main class="app-main main-content" {% if not current_user.is_authenticated %}style="width: 100%;"{% endif %}>
                 {% if current_user.is_authenticated %}
+                <!-- 上下文信息栏 -->
+                {% include 'components/context-bar.html' %}
+                
                 <!-- 页面标题栏 -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
                     {% block page_header %}{% endblock %}
@@ -259,23 +157,133 @@
                 <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
             </div>
             <div class="offcanvas-body">
+                {% if current_user.is_authenticated %}
                 <ul class="nav flex-column">
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.dashboard') }}">
                             <i class="fas fa-tachometer-alt me-2"></i>仪表板
                         </a>
                     </li>
+                    {% if current_user.has_any_permission(['cluster.view', 'cluster.create']) or current_user.can_manage_clusters() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.clusters') }}">
+                            <i class="fas fa-server me-2"></i>集群管理
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_any_permission(['instance.view', 'instance.create']) or current_user.can_operate_resources() %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.instances') }}">
                             <i class="fas fa-desktop me-2"></i>实例管理
                         </a>
                     </li>
+                    {% endif %}
+                    {% if current_user.has_any_permission(['volume.view', 'volume.create']) or current_user.can_operate_resources() %}
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('main.volumes') }}">
                             <i class="fas fa-hdd me-2"></i>卷管理
                         </a>
                     </li>
+                    {% endif %}
+                    {% if current_user.has_any_permission(['snapshot.view', 'snapshot.create']) or current_user.can_manage_snapshots() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.snapshots') }}">
+                            <i class="fas fa-camera me-2"></i>快照管理
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_permission('image.view') or current_user.can_view_resources() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.images') }}">
+                            <i class="fas fa-compact-disc me-2"></i>镜像管理
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_permission('network.view') or current_user.can_manage_networks() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.network_topology') }}">
+                            <i class="fas fa-project-diagram me-2"></i>网络拓扑
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_any_permission(['network.view', 'network.create']) or current_user.can_manage_networks() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.networks') }}">
+                            <i class="fas fa-globe me-2"></i>网络管理
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_any_permission(['network.view', 'network.create']) or current_user.can_manage_networks() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.routers') }}">
+                            <i class="fas fa-route me-2"></i>路由管理
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_any_permission(['network.view', 'network.create']) or current_user.can_manage_networks() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.security_groups') }}">
+                            <i class="fas fa-shield-alt me-2"></i>安全组
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_any_permission(['k8s.view', 'cluster.view', 'cluster.create']) or current_user.can_manage_clusters() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.k8s_clusters') }}">
+                            <i class="fas fa-dharmachakra me-2"></i>K8s集群
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_permission('k8s.namespace.manage') or current_user.can_manage_clusters() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.k8s_namespaces') }}">
+                            <i class="fas fa-layer-group me-2"></i>命名空间
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_any_permission(['k8s.pod.view', 'k8s.pod.manage']) or current_user.can_manage_clusters() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.k8s_pods') }}">
+                            <i class="fas fa-cube me-2"></i>Pod管理
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_permission('k8s.workload.manage') or current_user.can_manage_clusters() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.k8s_workloads') }}">
+                            <i class="fas fa-tasks me-2"></i>工作负载
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.has_permission('k8s.node.view') or current_user.can_manage_clusters() %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.k8s_all_nodes') }}">
+                            <i class="fas fa-network-wired me-2"></i>集群节点
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if current_user.can_manage_users() %}
+                    <li class="nav-item">
+                        <hr class="my-3">
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('admin.users') }}">
+                            <i class="fas fa-users me-2"></i>用户管理
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('main.roles') }}">
+                            <i class="fas fa-user-shield me-2"></i>角色管理
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
+                {% else %}
+                <div class="text-center py-4">
+                    <p class="text-muted">请先登录</p>
+                    <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-sm">登录</a>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -329,8 +337,68 @@
     <!-- Bootstrap JS -->
     <script src="{{ url_for('static', filename='js/vendor/bootstrap.bundle.min.js') }}"></script>
     
+    <!-- Bootstrap 5.3.0 Modal Backdrop Fix -->
+    <script>
+        // 修复 Bootstrap 5.3.0 的 backdrop 初始化问题
+        (function() {
+            // 保存原始的 Modal 构造函数
+            const OriginalModal = bootstrap.Modal;
+            
+            // 创建新的 Modal 构造函数包装器
+            bootstrap.Modal = function(element, config) {
+                // 确保 config 对象存在并包含 backdrop 属性
+                const defaultConfig = {
+                    backdrop: true,
+                    keyboard: true,
+                    focus: true
+                };
+                
+                // 合并配置
+                const finalConfig = Object.assign({}, defaultConfig, config || {});
+                
+                // 调用原始构造函数
+                return new OriginalModal(element, finalConfig);
+            };
+            
+            // 复制静态方法
+            Object.keys(OriginalModal).forEach(key => {
+                bootstrap.Modal[key] = OriginalModal[key];
+            });
+            
+            // 复制原型
+            bootstrap.Modal.prototype = OriginalModal.prototype;
+        })();
+    </script>
+    
+    <!-- 集群上下文管理器 -->
+    <script src="{{ url_for('static', filename='js/cluster-context-manager.js') }}"></script>
+    
+    <!-- 全局集群选择器 -->
+    <script src="{{ url_for('static', filename='js/cluster-selector.js') }}"></script>
+    
+    <!-- 上下文信息栏管理器 -->
+    <script src="{{ url_for('static', filename='js/context-bar-manager.js') }}"></script>
+    
+    <!-- 面包屑导航生成器 -->
+    <script src="{{ url_for('static', filename='js/breadcrumb-generator.js') }}"></script>
+    
     <!-- 自动刷新组件 -->
     <script src="{{ url_for('static', filename='js/auto-refresh.js') }}"></script>
+    
+    <!-- 侧边栏菜单增强组件 -->
+    <script src="{{ url_for('static', filename='js/sidebar-menu-enhanced.js') }}"></script>
+    
+    <!-- 资源标签页管理器 -->
+    <script src="{{ url_for('static', filename='js/resource-tabs.js') }}"></script>
+    
+    <!-- 移动端交互增强 -->
+    <script src="{{ url_for('static', filename='js/mobile-interactions.js') }}"></script>
+    
+    <!-- 可收缩侧边栏 -->
+    <script src="{{ url_for('static', filename='js/collapsible-sidebar.js') }}"></script>
+    
+    <!-- 集群选择器通用初始化 -->
+    <script src="{{ url_for('static', filename='js/cluster-selector-init.js') }}"></script>
     
     <script>
         // 全局通知函数
@@ -380,7 +448,7 @@
             bootstrap.Modal.getInstance(document.getElementById('changePasswordModal')).hide();
         });
 
-        // 侧边栏响应式处理和网络管理菜单增强
+        // 侧边栏响应式处理
         document.addEventListener('DOMContentLoaded', function() {
             // 添加当前页面高亮
             const currentPath = window.location.pathname;
@@ -391,102 +459,6 @@
                     link.classList.add('active');
                 }
             });
-
-            // OpenStack管理下拉菜单交互
-            const openstackDropdown = document.querySelector('.openstack-dropdown');
-            let openstackHoverTimeout;
-
-            if (openstackDropdown) {
-                // 鼠标进入时立即显示
-                openstackDropdown.addEventListener('mouseenter', function() {
-                    clearTimeout(openstackHoverTimeout);
-                    this.classList.add('show');
-                });
-
-                // 鼠标离开时延迟隐藏
-                openstackDropdown.addEventListener('mouseleave', function() {
-                    const self = this;
-                    openstackHoverTimeout = setTimeout(function() {
-                        self.classList.remove('show');
-                    }, 300); // 300ms延迟
-                });
-
-                // 子菜单项点击增强反馈
-                const openstackSubmenuLinks = openstackDropdown.querySelectorAll('.submenu-link');
-                openstackSubmenuLinks.forEach(link => {
-                    link.addEventListener('click', function(e) {
-                        // 添加点击波纹效果
-                        const ripple = document.createElement('span');
-                        ripple.classList.add('ripple');
-                        this.appendChild(ripple);
-                        
-                        setTimeout(() => {
-                            ripple.remove();
-                        }, 300);
-                    });
-                });
-
-                // 键盘导航支持
-                const openstackDropdownToggle = openstackDropdown.querySelector('.openstack-dropdown-toggle');
-                if (openstackDropdownToggle) {
-                    openstackDropdownToggle.addEventListener('keydown', function(e) {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            this.parentElement.classList.toggle('show');
-                        } else if (e.key === 'Escape') {
-                            this.parentElement.classList.remove('show');
-                        }
-                    });
-                }
-            }
-            
-            // 网络管理悬停菜单增强交互
-            const networkDropdown = document.querySelector('.network-dropdown');
-            let hoverTimeout;
-
-            if (networkDropdown) {
-                // 鼠标进入时立即显示
-                networkDropdown.addEventListener('mouseenter', function() {
-                    clearTimeout(hoverTimeout);
-                    this.classList.add('show');
-                });
-
-                // 鼠标离开时延迟隐藏
-                networkDropdown.addEventListener('mouseleave', function() {
-                    const self = this;
-                    hoverTimeout = setTimeout(function() {
-                        self.classList.remove('show');
-                    }, 300); // 300ms延迟
-                });
-
-                // 子菜单项点击增强反馈
-                const submenuLinks = networkDropdown.querySelectorAll('.submenu-link');
-                submenuLinks.forEach(link => {
-                    link.addEventListener('click', function(e) {
-                        // 添加点击波纹效果
-                        const ripple = document.createElement('span');
-                        ripple.classList.add('ripple');
-                        this.appendChild(ripple);
-                        
-                        setTimeout(() => {
-                            ripple.remove();
-                        }, 300);
-                    });
-                });
-
-                // 键盘导航支持
-                const dropdownToggle = networkDropdown.querySelector('.network-dropdown-toggle');
-                if (dropdownToggle) {
-                    dropdownToggle.addEventListener('keydown', function(e) {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            this.parentElement.classList.toggle('show');
-                        } else if (e.key === 'Escape') {
-                            this.parentElement.classList.remove('show');
-                        }
-                    });
-                }
-            }
         });
     </script>
     

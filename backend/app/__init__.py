@@ -75,6 +75,10 @@ def register_blueprints(app):
     from app.api import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
     
+    # 上下文API蓝图
+    from app.api.context import bp as context_bp
+    app.register_blueprint(context_bp)
+    
     # 管理蓝图
     from app.admin import admin_bp
     app.register_blueprint(admin_bp, url_prefix='/admin')

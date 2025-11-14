@@ -1075,10 +1075,10 @@ def create_namespace(cluster_id):
         OperationLog.log_operation(
             user_id=current_user.id,
             operation_type='create',
-            resource_type='namespace',
-            resource_name=data['name'],
-            cluster_info=f"K8s-{cluster.name}",
-            details=f"Created namespace {data['name']} in cluster {cluster.name}"
+            operation_object=f"namespace:{data['name']}",
+            result='success',
+            details=f"Created namespace {data['name']} in cluster {cluster.name}",
+            cluster_id=cluster_id
         )
         
         return jsonify(result), 201
@@ -1115,10 +1115,10 @@ def delete_namespace(cluster_id, namespace):
         OperationLog.log_operation(
             user_id=current_user.id,
             operation_type='delete',
-            resource_type='namespace',
-            resource_name=namespace,
-            cluster_info=f"K8s-{cluster.name}",
-            details=f"Deleted namespace {namespace} from cluster {cluster.name}"
+            operation_object=f"namespace:{namespace}",
+            result='success',
+            details=f"Deleted namespace {namespace} from cluster {cluster.name}",
+            cluster_id=cluster_id
         )
         
         return jsonify(result)
@@ -1206,10 +1206,10 @@ def delete_pod(cluster_id, namespace, pod_name):
         OperationLog.log_operation(
             user_id=current_user.id,
             operation_type='delete',
-            resource_type='pod',
-            resource_name=pod_name,
-            cluster_info=f"K8s-{cluster.name}",
-            details=f"Deleted pod {pod_name} from namespace {namespace} in cluster {cluster.name}"
+            operation_object=f"pod:{pod_name}",
+            result='success',
+            details=f"Deleted pod {pod_name} from namespace {namespace} in cluster {cluster.name}",
+            cluster_id=cluster_id
         )
         
         return jsonify(result)
@@ -1344,10 +1344,10 @@ def scale_deployment(cluster_id, namespace, deployment_name):
         OperationLog.log_operation(
             user_id=current_user.id,
             operation_type='scale',
-            resource_type='deployment',
-            resource_name=deployment_name,
-            cluster_info=f"K8s-{cluster.name}",
-            details=f"Scaled deployment {deployment_name} to {replicas} replicas in namespace {namespace}"
+            operation_object=f"deployment:{deployment_name}",
+            result='success',
+            details=f"Scaled deployment {deployment_name} to {replicas} replicas in namespace {namespace}",
+            cluster_id=cluster_id
         )
         
         return jsonify(result)
@@ -1376,10 +1376,10 @@ def restart_deployment(cluster_id, namespace, deployment_name):
         OperationLog.log_operation(
             user_id=current_user.id,
             operation_type='restart',
-            resource_type='deployment',
-            resource_name=deployment_name,
-            cluster_info=f"K8s-{cluster.name}",
-            details=f"Restarted deployment {deployment_name} in namespace {namespace}"
+            operation_object=f"deployment:{deployment_name}",
+            result='success',
+            details=f"Restarted deployment {deployment_name} in namespace {namespace}",
+            cluster_id=cluster_id
         )
         
         return jsonify(result)
@@ -1408,10 +1408,10 @@ def delete_deployment(cluster_id, namespace, deployment_name):
         OperationLog.log_operation(
             user_id=current_user.id,
             operation_type='delete',
-            resource_type='deployment',
-            resource_name=deployment_name,
-            cluster_info=f"K8s-{cluster.name}",
-            details=f"Deleted deployment {deployment_name} from namespace {namespace}"
+            operation_object=f"deployment:{deployment_name}",
+            result='success',
+            details=f"Deleted deployment {deployment_name} from namespace {namespace}",
+            cluster_id=cluster_id
         )
         
         return jsonify(result)
@@ -1440,6 +1440,96 @@ def get_deployment_details(cluster_id, namespace, deployment_name):
         
     except Exception as e:
         logger.error(f"Failed to get deployment {deployment_name} details: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/deployments/<string:deployment_name>/yaml', methods=['GET'])
+@login_required
+def get_deployment_yaml(cluster_id, namespace, deployment_name):
+    """获取Deployment YAML配置"""
+    try:
+        # 验证集群存在
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        k8s_service = get_k8s_service()
+        result = k8s_service.get_deployment_yaml(cluster_id, namespace, deployment_name)
+        
+        if not result['success']:
+            return jsonify(result), 500
+            
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to get deployment YAML for {deployment_name}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/deployments/<string:deployment_name>/yaml', methods=['PUT'])
+@login_required
+def update_deployment_yaml(cluster_id, namespace, deployment_name):
+    """更新Deployment YAML配置"""
+    try:
+        # 验证集群存在
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        data = request.get_json()
+        if not data or not data.get('yaml'):
+            return jsonify({'success': False, 'error': 'YAML content is required'}), 400
+        
+        k8s_service = get_k8s_service()
+        result = k8s_service.update_deployment_yaml(cluster_id, namespace, deployment_name, data['yaml'])
+        
+        if not result['success']:
+            return jsonify(result), 500
+        
+        # 记录操作日志
+        OperationLog.log_operation(
+            user_id=current_user.id,
+            operation_type='update_yaml',
+            operation_object=f"deployment:{deployment_name}",
+            result='success',
+            details=f"Updated deployment {deployment_name} YAML in namespace {namespace}",
+            cluster_id=cluster_id
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to update deployment YAML for {deployment_name}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/deployments/<string:deployment_name>/recreate', methods=['POST'])
+@login_required
+def recreate_deployment(cluster_id, namespace, deployment_name):
+    """重新创建Deployment"""
+    try:
+        # 验证集群存在
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        k8s_service = get_k8s_service()
+        result = k8s_service.recreate_deployment(cluster_id, namespace, deployment_name)
+        
+        if not result['success']:
+            return jsonify(result), 500
+        
+        # 记录操作日志
+        OperationLog.log_operation(
+            user_id=current_user.id,
+            operation_type='recreate',
+            operation_object=f"deployment:{deployment_name}",
+            result='success',
+            details=f"Recreated deployment {deployment_name} in namespace {namespace}",
+            cluster_id=cluster_id
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to recreate deployment {deployment_name}: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -1478,6 +1568,121 @@ def list_replicasets(cluster_id):
         logger.error(f"Failed to list replicasets for cluster {cluster_id}: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/replicasets/<string:replicaset_name>/yaml', methods=['GET'])
+@login_required
+def get_replicaset_yaml(cluster_id, namespace, replicaset_name):
+    """获取ReplicaSet YAML配置"""
+    try:
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        k8s_service = get_k8s_service()
+        result = k8s_service.get_replicaset_yaml(cluster_id, namespace, replicaset_name)
+        
+        if not result['success']:
+            return jsonify(result), 500
+            
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to get replicaset YAML for {replicaset_name}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/replicasets/<string:replicaset_name>/yaml', methods=['PUT'])
+@login_required
+def update_replicaset_yaml(cluster_id, namespace, replicaset_name):
+    """更新ReplicaSet YAML配置"""
+    try:
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        data = request.get_json()
+        if not data or not data.get('yaml'):
+            return jsonify({'success': False, 'error': 'YAML content is required'}), 400
+        
+        k8s_service = get_k8s_service()
+        result = k8s_service.update_replicaset_yaml(cluster_id, namespace, replicaset_name, data['yaml'])
+        
+        if not result['success']:
+            return jsonify(result), 500
+        
+        OperationLog.log_operation(
+            user_id=current_user.id,
+            operation_type='update_yaml',
+            operation_object=f"replicaset:{replicaset_name}",
+            result='success',
+            details=f"Updated replicaset {replicaset_name} YAML in namespace {namespace}",
+            cluster_id=cluster_id
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to update replicaset YAML for {replicaset_name}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/replicasets/<string:replicaset_name>/recreate', methods=['POST'])
+@login_required
+def recreate_replicaset(cluster_id, namespace, replicaset_name):
+    """重新创建ReplicaSet"""
+    try:
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        k8s_service = get_k8s_service()
+        result = k8s_service.recreate_replicaset(cluster_id, namespace, replicaset_name)
+        
+        if not result['success']:
+            return jsonify(result), 500
+        
+        OperationLog.log_operation(
+            user_id=current_user.id,
+            operation_type='recreate',
+            operation_object=f"replicaset:{replicaset_name}",
+            result='success',
+            details=f"Recreated replicaset {replicaset_name} in namespace {namespace}",
+            cluster_id=cluster_id
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to recreate replicaset {replicaset_name}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/replicasets/<string:replicaset_name>', methods=['DELETE'])
+@login_required
+def delete_replicaset(cluster_id, namespace, replicaset_name):
+    """删除ReplicaSet"""
+    try:
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        k8s_service = get_k8s_service()
+        result = k8s_service.delete_replicaset(cluster_id, namespace, replicaset_name)
+        
+        if not result['success']:
+            return jsonify(result), 500
+        
+        OperationLog.log_operation(
+            user_id=current_user.id,
+            operation_type='delete',
+            operation_object=f"replicaset:{replicaset_name}",
+            result='success',
+            details=f"Deleted replicaset {replicaset_name} from namespace {namespace}",
+            cluster_id=cluster_id
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to delete replicaset {replicaset_name}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # =================== DaemonSets管理 ===================
 
@@ -1512,6 +1717,121 @@ def list_daemonsets(cluster_id):
         
     except Exception as e:
         logger.error(f"Failed to list daemonsets for cluster {cluster_id}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/daemonsets/<string:daemonset_name>/yaml', methods=['GET'])
+@login_required
+def get_daemonset_yaml(cluster_id, namespace, daemonset_name):
+    """获取DaemonSet YAML配置"""
+    try:
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        k8s_service = get_k8s_service()
+        result = k8s_service.get_daemonset_yaml(cluster_id, namespace, daemonset_name)
+        
+        if not result['success']:
+            return jsonify(result), 500
+            
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to get daemonset YAML for {daemonset_name}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/daemonsets/<string:daemonset_name>/yaml', methods=['PUT'])
+@login_required
+def update_daemonset_yaml(cluster_id, namespace, daemonset_name):
+    """更新DaemonSet YAML配置"""
+    try:
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        data = request.get_json()
+        if not data or not data.get('yaml'):
+            return jsonify({'success': False, 'error': 'YAML content is required'}), 400
+        
+        k8s_service = get_k8s_service()
+        result = k8s_service.update_daemonset_yaml(cluster_id, namespace, daemonset_name, data['yaml'])
+        
+        if not result['success']:
+            return jsonify(result), 500
+        
+        OperationLog.log_operation(
+            user_id=current_user.id,
+            operation_type='update_yaml',
+            operation_object=f"daemonset:{daemonset_name}",
+            result='success',
+            details=f"Updated daemonset {daemonset_name} YAML in namespace {namespace}",
+            cluster_id=cluster_id
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to update daemonset YAML for {daemonset_name}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/daemonsets/<string:daemonset_name>/recreate', methods=['POST'])
+@login_required
+def recreate_daemonset(cluster_id, namespace, daemonset_name):
+    """重新创建DaemonSet"""
+    try:
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        k8s_service = get_k8s_service()
+        result = k8s_service.recreate_daemonset(cluster_id, namespace, daemonset_name)
+        
+        if not result['success']:
+            return jsonify(result), 500
+        
+        OperationLog.log_operation(
+            user_id=current_user.id,
+            operation_type='recreate',
+            operation_object=f"daemonset:{daemonset_name}",
+            result='success',
+            details=f"Recreated daemonset {daemonset_name} in namespace {namespace}",
+            cluster_id=cluster_id
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to recreate daemonset {daemonset_name}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/daemonsets/<string:daemonset_name>', methods=['DELETE'])
+@login_required
+def delete_daemonset(cluster_id, namespace, daemonset_name):
+    """删除DaemonSet"""
+    try:
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        k8s_service = get_k8s_service()
+        result = k8s_service.delete_daemonset(cluster_id, namespace, daemonset_name)
+        
+        if not result['success']:
+            return jsonify(result), 500
+        
+        OperationLog.log_operation(
+            user_id=current_user.id,
+            operation_type='delete',
+            operation_object=f"daemonset:{daemonset_name}",
+            result='success',
+            details=f"Deleted daemonset {daemonset_name} from namespace {namespace}",
+            cluster_id=cluster_id
+        )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to delete daemonset {daemonset_name}: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -1550,6 +1870,51 @@ def list_statefulsets(cluster_id):
         logger.error(f"Failed to list statefulsets for cluster {cluster_id}: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# StatefulSets YAML and management operations
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/statefulsets/<string:statefulset_name>/yaml', methods=['GET', 'PUT'])
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/statefulsets/<string:statefulset_name>/recreate', methods=['POST'])
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/statefulsets/<string:statefulset_name>', methods=['DELETE'])
+@login_required
+def manage_statefulset_operations(cluster_id, namespace, statefulset_name):
+    """StatefulSet管理操作"""
+    try:
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        k8s_service = get_k8s_service()
+        method = request.method
+        endpoint = request.endpoint
+        
+        if 'yaml' in endpoint:
+            if method == 'GET':
+                result = k8s_service.get_statefulset_yaml(cluster_id, namespace, statefulset_name)
+            elif method == 'PUT':
+                data = request.get_json()
+                if not data or not data.get('yaml'):
+                    return jsonify({'success': False, 'error': 'YAML content is required'}), 400
+                result = k8s_service.update_statefulset_yaml(cluster_id, namespace, statefulset_name, data['yaml'])
+        elif 'recreate' in endpoint:
+            result = k8s_service.recreate_statefulset(cluster_id, namespace, statefulset_name)
+        elif method == 'DELETE':
+            result = k8s_service.delete_statefulset(cluster_id, namespace, statefulset_name)
+        
+        if result['success'] and method in ['PUT', 'POST', 'DELETE']:
+            OperationLog.log_operation(
+                user_id=current_user.id,
+                operation_type=method.lower(),
+                operation_object=f"statefulset:{statefulset_name}",
+                result='success',
+                details=f"{method} statefulset {statefulset_name}",
+                cluster_id=cluster_id
+            )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to manage statefulset {statefulset_name}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # =================== Jobs管理 ===================
 
@@ -1586,6 +1951,51 @@ def list_jobs(cluster_id):
         logger.error(f"Failed to list jobs for cluster {cluster_id}: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+# Jobs YAML and management operations
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/jobs/<string:job_name>/yaml', methods=['GET', 'PUT'])
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/jobs/<string:job_name>/recreate', methods=['POST'])
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/jobs/<string:job_name>', methods=['DELETE'])
+@login_required
+def manage_job_operations(cluster_id, namespace, job_name):
+    """Job管理操作"""
+    try:
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        k8s_service = get_k8s_service()
+        method = request.method
+        endpoint = request.endpoint
+        
+        if 'yaml' in endpoint:
+            if method == 'GET':
+                result = k8s_service.get_job_yaml(cluster_id, namespace, job_name)
+            elif method == 'PUT':
+                data = request.get_json()
+                if not data or not data.get('yaml'):
+                    return jsonify({'success': False, 'error': 'YAML content is required'}), 400
+                result = k8s_service.update_job_yaml(cluster_id, namespace, job_name, data['yaml'])
+        elif 'recreate' in endpoint:
+            result = k8s_service.recreate_job(cluster_id, namespace, job_name)
+        elif method == 'DELETE':
+            result = k8s_service.delete_job(cluster_id, namespace, job_name)
+        
+        if result['success'] and method in ['PUT', 'POST', 'DELETE']:
+            OperationLog.log_operation(
+                user_id=current_user.id,
+                operation_type=method.lower(),
+                operation_object=f"job:{job_name}",
+                result='success',
+                details=f"{method} job {job_name}",
+                cluster_id=cluster_id
+            )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to manage job {job_name}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 # =================== CronJobs管理 ===================
 
@@ -1620,6 +2030,51 @@ def list_cronjobs(cluster_id):
         
     except Exception as e:
         logger.error(f"Failed to list cronjobs for cluster {cluster_id}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# CronJobs YAML and management operations
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/cronjobs/<string:cronjob_name>/yaml', methods=['GET', 'PUT'])
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/cronjobs/<string:cronjob_name>/recreate', methods=['POST'])
+@api.route('/k8s/clusters/<int:cluster_id>/namespaces/<string:namespace>/cronjobs/<string:cronjob_name>', methods=['DELETE'])
+@login_required
+def manage_cronjob_operations(cluster_id, namespace, cronjob_name):
+    """CronJob管理操作"""
+    try:
+        cluster = K8sCluster.query.get(cluster_id)
+        if not cluster:
+            return jsonify({'success': False, 'error': 'Cluster not found'}), 404
+        
+        k8s_service = get_k8s_service()
+        method = request.method
+        endpoint = request.endpoint
+        
+        if 'yaml' in endpoint:
+            if method == 'GET':
+                result = k8s_service.get_cronjob_yaml(cluster_id, namespace, cronjob_name)
+            elif method == 'PUT':
+                data = request.get_json()
+                if not data or not data.get('yaml'):
+                    return jsonify({'success': False, 'error': 'YAML content is required'}), 400
+                result = k8s_service.update_cronjob_yaml(cluster_id, namespace, cronjob_name, data['yaml'])
+        elif 'recreate' in endpoint:
+            result = k8s_service.recreate_cronjob(cluster_id, namespace, cronjob_name)
+        elif method == 'DELETE':
+            result = k8s_service.delete_cronjob(cluster_id, namespace, cronjob_name)
+        
+        if result['success'] and method in ['PUT', 'POST', 'DELETE']:
+            OperationLog.log_operation(
+                user_id=current_user.id,
+                operation_type=method.lower(),
+                operation_object=f"cronjob:{cronjob_name}",
+                result='success',
+                details=f"{method} cronjob {cronjob_name}",
+                cluster_id=cluster_id
+            )
+        
+        return jsonify(result)
+        
+    except Exception as e:
+        logger.error(f"Failed to manage cronjob {cronjob_name}: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # ====== Pod终端功能 ======

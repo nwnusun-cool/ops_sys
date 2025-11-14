@@ -40,7 +40,13 @@ def dashboard():
 @login_required
 def clusters():
     """OpenStack集群管理页面"""
-    return render_template('clusters/index.html')
+    return render_template('clusters/index_modern.html')
+
+@main_bp.route('/clusters/<int:cluster_id>')
+@login_required
+def cluster_detail(cluster_id):
+    """集群详情页面"""
+    return render_template('clusters/detail.html', cluster_id=cluster_id)
 
 @main_bp.route('/k8s-clusters')
 @login_required
@@ -138,6 +144,15 @@ def images():
     """镜像管理页面"""
     return render_template('images/index.html')
 
+@main_bp.route('/roles')
+@login_required
+def roles():
+    """角色管理页面"""
+    # 检查权限
+    if not (current_user.has_permission('role.view') or current_user.role == 'super_admin'):
+        return redirect(url_for('main.dashboard'))
+    return render_template('roles/index.html')
+
 @main_bp.route('/api/stats')
 @login_required
 def api_stats():
@@ -155,3 +170,38 @@ def api_stats():
         }
     }
     return jsonify(stats)
+
+@main_bp.route('/api/instances/stats')
+@login_required 
+def api_instance_stats():
+    """实例统计信息"""
+    try:
+        # 这里应该调用实际的OpenStack API获取实例统计
+        # 暂时返回模拟数据
+        stats = {
+            'success': True,
+            'total': 0,
+            'running': 0,
+            'stopped': 0,
+            'error': 0
+        }
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@main_bp.route('/api/volumes/stats')
+@login_required
+def api_volume_stats():
+    """卷统计信息"""
+    try:
+        # 这里应该调用实际的OpenStack API获取卷统计
+        # 暂时返回模拟数据
+        stats = {
+            'success': True,
+            'total': 0,
+            'in_use': 0,
+            'available': 0
+        }
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})

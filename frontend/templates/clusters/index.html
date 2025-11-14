@@ -3,6 +3,8 @@
 {% block title %}集群管理 - {{ super() }}{% endblock %}
 
 {% block extra_css %}
+<!-- 引入增强样式 -->
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cluster-enhanced.css') }}">
 <style>
     .cluster-card {
         transition: transform 0.2s;
@@ -70,6 +72,24 @@
         <span class="visually-hidden">加载中...</span>
     </div>
     <p class="mt-2 text-muted">正在加载集群信息...</p>
+</div>
+
+<!-- 自动刷新控制 -->
+<div class="auto-refresh-control">
+    <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="autoRefreshToggle">
+        <label class="form-check-label" for="autoRefreshToggle">
+            自动刷新
+        </label>
+    </div>
+    <select class="form-select form-select-sm" id="refreshInterval" style="width: auto;">
+        <option value="30">30秒</option>
+        <option value="60" selected>1分钟</option>
+        <option value="300">5分钟</option>
+    </select>
+    <small class="text-muted">
+        最后更新: <span id="lastUpdateTime">-</span>
+    </small>
 </div>
 
 <!-- 集群状态概览 -->
@@ -588,11 +608,79 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- 引入增强功能JS -->
+<script src="{{ url_for('static', filename='js/cluster-enhanced.js') }}"></script>
 <script>
     let currentPage = 1;
     let currentClusterId = null;
     let isLoading = false;
     let currentStatisticsClusterId = null;
+
+    // 显示警告消息 - 定义在最前面以供所有函数使用
+    function showAlert(message, type) {
+        // 移除现有的alert
+        const existingAlerts = document.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const content = document.querySelector('main');
+        if (content) {
+            content.insertBefore(alertDiv, content.firstChild);
+        }
+        
+        // 5秒后自动删除（除了info类型的alert）
+        if (type !== 'info') {
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+    }
+
+    // 全局函数供增强功能使用
+    function viewInstances(clusterId) {
+        window.location.href = `/instances?cluster=${clusterId}`;
+    }
+    
+    function viewVolumes(clusterId) {
+        window.location.href = `/volumes?cluster=${clusterId}`;
+    }
+    
+    function viewTopology(clusterId) {
+        window.location.href = `/network-topology?cluster=${clusterId}`;
+    }
+    
+    async function switchProject(clusterId, projectId) {
+        try {
+            const response = await fetch(
+                `/api/clusters/${clusterId}/projects/${projectId}/switch`,
+                { 
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            );
+            const data = await response.json();
+            
+            if (data.success) {
+                showAlert(data.message, 'success');
+                if (clusterManager) {
+                    clusterManager.loadEnhancedClusters();
+                }
+            } else {
+                showAlert(data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Failed to switch project:', error);
+            showAlert('切换项目失败', 'danger');
+        }
+    }
 
     // 页面加载完成后初始化
     document.addEventListener('DOMContentLoaded', function() {
@@ -602,6 +690,12 @@
             loadClustersStatus()
         ]).finally(() => {
             showLoading(false);
+        });
+        
+        // 初始化tooltips
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
         });
     });
 
@@ -880,6 +974,20 @@
 
     // 编辑集群
     async function editCluster(clusterId) {
+        // 检查权限
+        const hasAdminRole = {{ 'true' if current_user.has_role(['super_admin', 'admin']) else 'false' }};
+        if (!hasAdminRole) {
+            showAlert('您没有权限编辑集群', 'warning');
+            return;
+        }
+        
+        // 检查模态框是否存在
+        const modalElement = document.getElementById('editClusterModal');
+        if (!modalElement) {
+            showAlert('编辑功能不可用', 'warning');
+            return;
+        }
+        
         try {
             const response = await fetch(`/api/clusters/${clusterId}`);
             const data = await response.json();
@@ -911,7 +1019,8 @@
                 passwordInput.type = 'password';
                 icon.className = 'fas fa-eye';
 
-                new bootstrap.Modal(document.getElementById('editClusterModal')).show();
+                const editModal = new bootstrap.Modal(document.getElementById('editClusterModal'));
+                editModal.show();
             } else {
                 showAlert('获取集群信息失败: ' + data.error, 'danger');
             }
@@ -975,7 +1084,8 @@
     function deleteCluster(clusterId, clusterName) {
         currentClusterId = clusterId;
         document.getElementById('deleteClusterName').textContent = clusterName;
-        new bootstrap.Modal(document.getElementById('deleteClusterModal')).show();
+        const deleteModal = new bootstrap.Modal(document.getElementById('deleteClusterModal'));
+        deleteModal.show();
     }
 
     async function confirmDeleteCluster() {
@@ -1001,7 +1111,7 @@
     }
     {% endif %}
 
-    // 查看资源统计
+    // 查看资源统计 (已弃用，使用showClusterStatistics代替)
     async function viewResources(clusterId) {
         try {
             const response = await fetch(`/api/clusters/${clusterId}/resources`);
@@ -1023,32 +1133,6 @@
         } catch (error) {
             console.error('Error:', error);
             showAlert('获取资源统计时发生错误', 'danger');
-        }
-    }
-
-    // 显示警告消息
-    function showAlert(message, type) {
-        // 移除现有的alert
-        const existingAlerts = document.querySelectorAll('.alert');
-        existingAlerts.forEach(alert => alert.remove());
-        
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
-        alertDiv.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        
-        const content = document.querySelector('main');
-        content.insertBefore(alertDiv, content.firstChild);
-        
-        // 5秒后自动删除（除了info类型的alert）
-        if (type !== 'info') {
-            setTimeout(() => {
-                if (alertDiv.parentNode) {
-                    alertDiv.remove();
-                }
-            }, 5000);
         }
     }
 

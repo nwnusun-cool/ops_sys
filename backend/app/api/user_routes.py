@@ -167,10 +167,14 @@ def create_user():
             if not data.get(field):
                 return jsonify({'success': False, 'error': f'缺少必填字段: {field}'}), 400
         
-        # 验证角色
-        valid_roles = ['viewer', 'operator', 'admin', 'super_admin']
-        if data['role'] not in valid_roles:
-            return jsonify({'success': False, 'error': f'无效的角色，必须是: {", ".join(valid_roles)}'}), 400
+        # 验证角色（支持新角色系统）
+        from app.models.role import Role
+        role_obj = Role.query.filter_by(code=data['role'], is_active=True).first()
+        if not role_obj:
+            # 如果新角色系统中找不到，检查是否为旧系统角色
+            valid_roles = ['viewer', 'operator', 'admin', 'super_admin']
+            if data['role'] not in valid_roles:
+                return jsonify({'success': False, 'error': f'无效的角色代码: {data["role"]}'}), 400
         
         # 检查用户名是否存在
         if User.query.filter_by(username=data['username']).first():
@@ -190,6 +194,19 @@ def create_user():
         user.set_password(data['password'])
         
         db.session.add(user)
+        db.session.flush()  # 获取用户ID
+        
+        # 如果找到了角色对象，同时在新系统中分配角色
+        if role_obj:
+            from app.models.role import UserRole
+            user_role = UserRole(
+                user_id=user.id,
+                role_id=role_obj.id,
+                is_primary=True,
+                assigned_by=current_user.id
+            )
+            db.session.add(user_role)
+        
         db.session.commit()
         
         # 记录操作日志
@@ -246,13 +263,32 @@ def update_user(user_id):
             changes.append(f"邮箱: {user.email} -> {data['email']}")
             user.email = data['email']
         
-        # 更新角色
+        # 更新角色（支持新角色系统）
         if 'role' in data and data['role'] != user.role:
-            valid_roles = ['viewer', 'operator', 'admin', 'super_admin']
-            if data['role'] not in valid_roles:
-                return jsonify({'success': False, 'error': f'无效的角色，必须是: {", ".join(valid_roles)}'}), 400
+            from app.models.role import Role, UserRole
+            role_obj = Role.query.filter_by(code=data['role'], is_active=True).first()
+            if not role_obj:
+                # 如果新角色系统中找不到，检查是否为旧系统角色
+                valid_roles = ['viewer', 'operator', 'admin', 'super_admin']
+                if data['role'] not in valid_roles:
+                    return jsonify({'success': False, 'error': f'无效的角色代码: {data["role"]}'}), 400
+            
             changes.append(f"角色: {user.role} -> {data['role']}")
             user.role = data['role']
+            
+            # 同时更新新角色系统
+            if role_obj:
+                # 删除旧的角色分配
+                UserRole.query.filter_by(user_id=user.id, is_primary=True).delete()
+                
+                # 创建新的角色分配
+                user_role = UserRole(
+                    user_id=user.id,
+                    role_id=role_obj.id,
+                    is_primary=True,
+                    assigned_by=current_user.id
+                )
+                db.session.add(user_role)
         
         # 更新状态
         if 'is_active' in data and data['is_active'] != user.is_active:

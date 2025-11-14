@@ -13,6 +13,7 @@ import tempfile
 from typing import Dict, List, Any, Optional
 from keystoneauth1.identity import v3
 from keystoneauth1 import session
+from keystoneclient.v3 import client as keystone_client
 from novaclient import client as nova_client
 from cinderclient import client as cinder_client
 from neutronclient.v2_0 import client as neutron_client
@@ -66,6 +67,7 @@ class OpenstackService:
     
     def __init__(self):
         self.sessions = {}
+        self.keystone_clients = {}
         self.nova_clients = {}
         self.cinder_clients = {}
         self.neutron_clients = {}
@@ -93,6 +95,7 @@ class OpenstackService:
             self._create_cluster_clients(cluster, cluster_key)
         
         return {
+            'keystone': self.keystone_clients.get(cluster_key),
             'nova': self.nova_clients.get(cluster_key),
             'cinder': self.cinder_clients.get(cluster_key),
             'neutron': self.neutron_clients.get(cluster_key),
@@ -114,6 +117,9 @@ class OpenstackService:
             auth = v3.Password(**auth_config)
             
             self.sessions[cluster_key] = session.Session(auth=auth)
+            self.keystone_clients[cluster_key] = keystone_client.Client(
+                session=self.sessions[cluster_key], region_name=cluster.region_name
+            )
             self.nova_clients[cluster_key] = nova_client.Client(
                 2, session=self.sessions[cluster_key], region_name=cluster.region_name
             )
@@ -398,6 +404,23 @@ class OpenstackService:
     def clear_cache(self, cluster_id: Optional[int] = None):
         """清除缓存"""
         if cluster_id:
+            cluster_key = f"cluster_{cluster_id}"
+            
+            # 清除客户端缓存
+            if cluster_key in self.sessions:
+                del self.sessions[cluster_key]
+            if cluster_key in self.keystone_clients:
+                del self.keystone_clients[cluster_key]
+            if cluster_key in self.nova_clients:
+                del self.nova_clients[cluster_key]
+            if cluster_key in self.cinder_clients:
+                del self.cinder_clients[cluster_key]
+            if cluster_key in self.neutron_clients:
+                del self.neutron_clients[cluster_key]
+            if cluster_key in self.glance_clients:
+                del self.glance_clients[cluster_key]
+            
+            # 清除数据缓存
             cache_keys = [k for k in self.instance_cache.keys() if k.endswith(f"_{cluster_id}")]
             for key in cache_keys:
                 if key in self.instance_cache:
@@ -405,9 +428,268 @@ class OpenstackService:
                 if key in self.last_cache_update:
                     del self.last_cache_update[key]
         else:
+            # 清除所有缓存
+            self.sessions.clear()
+            self.keystone_clients.clear()
+            self.nova_clients.clear()
+            self.cinder_clients.clear()
+            self.neutron_clients.clear()
+            self.glance_clients.clear()
             self.instance_cache.clear()
             self.volume_cache.clear()
             self.last_cache_update.clear()
+    
+    def get_service_health(self, cluster_id: int) -> Dict[str, str]:
+        """
+        获取OpenStack服务健康状态
+        返回各服务的健康状态：healthy, degraded, down, unknown
+        """
+        health_status = {
+            'nova': 'unknown',
+            'cinder': 'unknown',
+            'neutron': 'unknown',
+            'glance': 'unknown'
+        }
+        
+        try:
+            clients = self.get_cluster_clients(cluster_id)
+            
+            # 检查Nova服务
+            try:
+                nova_client = clients['nova']
+                services = nova_client.services.list()
+                
+                if not services:
+                    health_status['nova'] = 'down'
+                else:
+                    # 统计服务状态
+                    total_services = len(services)
+                    up_services = sum(1 for s in services if s.state == 'up' and s.status == 'enabled')
+                    
+                    if up_services == total_services:
+                        health_status['nova'] = 'healthy'
+                    elif up_services > 0:
+                        health_status['nova'] = 'degraded'
+                    else:
+                        health_status['nova'] = 'down'
+                        
+            except Exception as e:
+                logger.warning(f"Failed to check Nova health for cluster {cluster_id}: {e}")
+                health_status['nova'] = 'down'
+            
+            # 检查Cinder服务
+            try:
+                cinder_client = clients['cinder']
+                services = cinder_client.services.list()
+                
+                if not services:
+                    health_status['cinder'] = 'down'
+                else:
+                    total_services = len(services)
+                    up_services = sum(1 for s in services if s.state == 'up' and s.status == 'enabled')
+                    
+                    if up_services == total_services:
+                        health_status['cinder'] = 'healthy'
+                    elif up_services > 0:
+                        health_status['cinder'] = 'degraded'
+                    else:
+                        health_status['cinder'] = 'down'
+                        
+            except Exception as e:
+                logger.warning(f"Failed to check Cinder health for cluster {cluster_id}: {e}")
+                health_status['cinder'] = 'down'
+            
+            # 检查Neutron服务
+            try:
+                neutron_client = clients['neutron']
+                agents = neutron_client.list_agents()['agents']
+                
+                if not agents:
+                    health_status['neutron'] = 'down'
+                else:
+                    total_agents = len(agents)
+                    alive_agents = sum(1 for a in agents if a.get('alive', False) and a.get('admin_state_up', False))
+                    
+                    if alive_agents == total_agents:
+                        health_status['neutron'] = 'healthy'
+                    elif alive_agents > 0:
+                        health_status['neutron'] = 'degraded'
+                    else:
+                        health_status['neutron'] = 'down'
+                        
+            except Exception as e:
+                logger.warning(f"Failed to check Neutron health for cluster {cluster_id}: {e}")
+                health_status['neutron'] = 'down'
+            
+            # 检查Glance服务
+            try:
+                glance_client = clients['glance']
+                # 尝试列出镜像来验证服务可用性
+                list(glance_client.images.list(limit=1))
+                health_status['glance'] = 'healthy'
+                        
+            except Exception as e:
+                logger.warning(f"Failed to check Glance health for cluster {cluster_id}: {e}")
+                health_status['glance'] = 'down'
+                
+        except Exception as e:
+            logger.error(f"Failed to get service health for cluster {cluster_id}: {e}")
+            # 保持所有服务为unknown状态
+        
+        return health_status
+    
+    def get_cluster_hosts(self, cluster_id: int) -> List[Dict]:
+        """
+        获取集群的计算节点（主机/Hypervisor）列表
+        
+        Args:
+            cluster_id: 集群ID
+            
+        Returns:
+            List[Dict]: 主机列表，包含资源使用情况
+        """
+        try:
+            clients = self.get_cluster_clients(cluster_id)
+            nova_client = clients['nova']
+            
+            logger.info(f"开始获取集群 {cluster_id} 的计算节点列表")
+            
+            # 方法1: 先尝试通过services API获取所有compute服务
+            # 这个API通常能返回所有计算节点
+            try:
+                logger.info("尝试通过services API获取计算节点")
+                services = nova_client.services.list(binary='nova-compute')
+                logger.info(f"通过services API找到 {len(services)} 个nova-compute服务")
+                
+                # 从services中提取唯一的host列表
+                host_names = list(set([s.host for s in services if s.binary == 'nova-compute']))
+                logger.info(f"提取到 {len(host_names)} 个唯一的计算节点主机名: {host_names}")
+                
+                # 对每个host，尝试获取hypervisor详细信息
+                hypervisors = []
+                for host_name in host_names:
+                    try:
+                        # 使用search方法查找特定主机的hypervisor
+                        host_hypervisors = nova_client.hypervisors.search(host_name, servers=False)
+                        if host_hypervisors:
+                            hypervisors.extend(host_hypervisors)
+                            logger.debug(f"找到主机 {host_name} 的hypervisor")
+                        else:
+                            logger.warning(f"主机 {host_name} 没有对应的hypervisor")
+                    except Exception as e:
+                        logger.warning(f"获取主机 {host_name} 的hypervisor失败: {e}")
+                
+                logger.info(f"通过services API最终获取到 {len(hypervisors)} 个hypervisor")
+                
+            except Exception as e:
+                logger.warning(f"通过services API获取失败: {e}，尝试直接使用hypervisors API")
+                # 方法2: 如果services API失败，使用传统的hypervisors.list()
+                hypervisors = nova_client.hypervisors.list(detailed=True)
+                logger.info(f"通过hypervisors.list()获取到 {len(hypervisors)} 个hypervisor")
+            
+            hosts_data = []
+            for hypervisor in hypervisors:
+                try:
+                    # 如果list(detailed=True)已经返回详细信息，直接使用
+                    # 否则需要调用get()获取详细信息
+                    if hasattr(hypervisor, 'vcpus') and hasattr(hypervisor, 'memory_mb'):
+                        # 已经有详细信息
+                        hypervisor_detail = hypervisor
+                        logger.debug(f"Using detailed info from list for {hypervisor.hypervisor_hostname}")
+                    else:
+                        # 需要获取详细信息
+                        hypervisor_detail = nova_client.hypervisors.get(hypervisor.id)
+                        logger.debug(f"Fetched detailed info for {hypervisor.hypervisor_hostname}")
+                    # 确定服务类型/角色
+                    service_type = 'compute'  # 默认为计算节点
+                    hypervisor_type = getattr(hypervisor_detail, 'hypervisor_type', '').lower()
+                    
+                    # 根据hypervisor类型或服务名称判断角色
+                    if 'controller' in hypervisor_detail.hypervisor_hostname.lower():
+                        service_type = 'controller'
+                    elif 'network' in hypervisor_detail.hypervisor_hostname.lower():
+                        service_type = 'network'
+                    elif 'storage' in hypervisor_detail.hypervisor_hostname.lower():
+                        service_type = 'storage'
+                    
+                    host_info = {
+                        'id': hypervisor_detail.id,
+                        'host_name': hypervisor_detail.hypervisor_hostname,
+                        'hypervisor_hostname': hypervisor_detail.hypervisor_hostname,
+                        'hypervisor_type': getattr(hypervisor_detail, 'hypervisor_type', 'Unknown'),
+                        'hypervisor_version': getattr(hypervisor_detail, 'hypervisor_version', 0),
+                        'state': getattr(hypervisor_detail, 'state', 'unknown'),
+                        'status': getattr(hypervisor_detail, 'status', 'unknown'),
+                        'service': service_type,
+                        
+                        # 可用区
+                        'zone': getattr(hypervisor_detail, 'service', {}).get('zone', 'nova'),
+                        
+                        # CPU资源
+                        'vcpus': getattr(hypervisor_detail, 'vcpus', 0),
+                        'vcpus_used': getattr(hypervisor_detail, 'vcpus_used', 0),
+                        
+                        # 内存资源 (MB)
+                        'memory_mb': getattr(hypervisor_detail, 'memory_mb', 0),
+                        'memory_mb_used': getattr(hypervisor_detail, 'memory_mb_used', 0),
+                        
+                        # 磁盘资源 (GB)
+                        'local_gb': getattr(hypervisor_detail, 'local_gb', 0),
+                        'local_gb_used': getattr(hypervisor_detail, 'local_gb_used', 0),
+                        
+                        # 运行的虚拟机数量
+                        'running_vms': getattr(hypervisor_detail, 'running_vms', 0),
+                        
+                        # IP地址
+                        'host_ip': getattr(hypervisor_detail, 'host_ip', 'N/A'),
+                        
+                        # CPU信息
+                        'cpu_info': getattr(hypervisor_detail, 'cpu_info', {}),
+                        
+                        # 磁盘可用空间
+                        'free_disk_gb': getattr(hypervisor_detail, 'free_disk_gb', 0),
+                        'free_ram_mb': getattr(hypervisor_detail, 'free_ram_mb', 0),
+                        
+                        # 当前工作负载
+                        'current_workload': getattr(hypervisor_detail, 'current_workload', 0),
+                        
+                        # 磁盘可用率
+                        'disk_available_least': getattr(hypervisor_detail, 'disk_available_least', 0),
+                    }
+                    
+                    hosts_data.append(host_info)
+                    
+                except Exception as e:
+                    logger.warning(f"Failed to get details for hypervisor {hypervisor.id}: {e}")
+                    # 添加基本信息
+                    hosts_data.append({
+                        'id': hypervisor.id,
+                        'host_name': hypervisor.hypervisor_hostname,
+                        'hypervisor_hostname': hypervisor.hypervisor_hostname,
+                        'state': getattr(hypervisor, 'state', 'unknown'),
+                        'status': getattr(hypervisor, 'status', 'unknown'),
+                        'service': 'compute',
+                        'zone': 'nova',
+                        'vcpus': 0,
+                        'vcpus_used': 0,
+                        'memory_mb': 0,
+                        'memory_mb_used': 0,
+                        'local_gb': 0,
+                        'local_gb_used': 0,
+                        'running_vms': 0,
+                        'host_ip': 'N/A'
+                    })
+            
+            # 按主机名排序
+            hosts_data.sort(key=lambda x: x['host_name'])
+            
+            logger.info(f"Successfully retrieved {len(hosts_data)} hosts for cluster {cluster_id}")
+            logger.debug(f"Hosts data: {[h['host_name'] for h in hosts_data]}")
+            return hosts_data
+            
+        except Exception as e:
+            logger.error(f"Failed to get hosts for cluster {cluster_id}: {str(e)}")
+            raise Exception(f"Failed to get cluster hosts: {str(e)}")
     
     def list_volumes(self, cluster_id: int, status: str = None, search: str = None, volume_type: str = None) -> List[Dict]:
         """获取卷列表"""

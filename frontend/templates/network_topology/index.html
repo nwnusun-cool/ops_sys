@@ -23,6 +23,11 @@
             <i class="fas fa-info-circle me-1"></i>图例
         </button>
     </div>
+    <div class="btn-group">
+        <button type="button" class="btn btn-outline-secondary" onclick="debugTopology()">
+            <i class="fas fa-bug me-1"></i>调试
+        </button>
+    </div>
 </div>
 {% endblock %}
 
@@ -160,6 +165,13 @@
 
 <!-- 加载D3.js用于拓扑图绘制 -->
 <script src="{{ url_for('static', filename='js/vendor/d3.v7.min.js') }}"></script>
+
+<!-- 加载拓扑模块 -->
+<script src="{{ url_for('static', filename='js/network-topology/topology-core.js') }}"></script>
+<script src="{{ url_for('static', filename='js/network-topology/topology-renderer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/network-topology/topology-layout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/network-topology/topology-vertical-layout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/network-topology/topology-interaction.js') }}"></script>
 {% endblock %}
 
 {% block content %}
@@ -245,12 +257,9 @@
     <!-- SVG画布 -->
     <svg class="topology-canvas" id="topologySvg"></svg>
     
-    <!-- 节点信息面板 -->
-    <div class="node-info-panel" id="nodeInfoPanel">
-        <button type="button" class="btn-close float-end" onclick="hideNodeInfo()"></button>
-        <div id="nodeInfoContent">
-            <!-- 节点信息将通过JavaScript填充 -->
-        </div>
+    <!-- 节点详情面板 -->
+    <div class="node-info-panel" id="nodeDetailPanel" style="display: none;">
+        <!-- 节点详情将通过JavaScript填充 -->
     </div>
 </div>
 {% endblock %}
@@ -258,13 +267,7 @@
 {% block extra_js %}
 <script>
     let currentClusterId = null;
-    let topologyData = null;
-    let svg = null;
-    let g = null;
-    let simulation = null;
-    let zoom = null;
-    let nodes = null;
-    let links = null;
+    let topologyCore = null;
     
     // 节点颜色配置
     const nodeColors = {
@@ -276,12 +279,19 @@
     
     // 页面加载完成后初始化
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('DOM loaded, checking D3...');
+        console.log('DOM loaded, checking dependencies...');
         
         // 检查D3是否加载
         if (typeof d3 === 'undefined') {
             console.error('D3.js not loaded!');
             showAlert('D3.js库未加载，请刷新页面重试', 'danger');
+            return;
+        }
+        
+        // 检查拓扑模块是否加载
+        if (typeof TopologyCore === 'undefined') {
+            console.error('Topology modules not loaded!');
+            showAlert('拓扑模块未加载，请刷新页面重试', 'danger');
             return;
         }
         
@@ -301,49 +311,28 @@
     function initTopology() {
         console.log('Initializing topology visualization...');
         
-        const containerNode = document.getElementById("topologyContainer");
-        if (!containerNode) {
-            throw new Error('Topology container not found');
+        const container = document.getElementById("topologySvg");
+        if (!container) {
+            throw new Error('Topology SVG element not found');
         }
         
+        const containerNode = document.getElementById("topologyContainer");
         const width = containerNode.offsetWidth || 800;
         const height = containerNode.offsetHeight || 600;
         
         console.log(`Container size: ${width}x${height}`);
         
-        // 创建SVG
-        const svgElement = document.getElementById("topologySvg");
-        if (!svgElement) {
-            throw new Error('SVG element not found');
-        }
-        
-        svg = d3.select("#topologySvg")
-            .attr("width", width)
-            .attr("height", height);
-        
         // 清空现有内容
-        svg.selectAll("*").remove();
+        container.innerHTML = '';
         
-        // 创建缩放行为
-        zoom = d3.zoom()
-            .scaleExtent([0.1, 4])
-            .on("zoom", (event) => {
-                if (g) {
-                    g.attr("transform", event.transform);
-                }
-            });
-        
-        svg.call(zoom);
-        
-        // 创建主绘图组
-        g = svg.append("g");
-        
-        // 创建力导向图仿真
-        simulation = d3.forceSimulation()
-            .force("link", d3.forceLink().id(d => d.id).distance(150))
-            .force("charge", d3.forceManyBody().strength(-300))
-            .force("center", d3.forceCenter(width / 2, height / 2))
-            .force("collision", d3.forceCollide().radius(50));
+        // 创建拓扑核心实例
+        topologyCore = new TopologyCore(container, {
+            width: width,
+            height: height,
+            nodeRadius: 15,
+            linkDistance: 150,
+            chargeStrength: -300
+        });
         
         console.log('Topology initialization completed');
     }
@@ -436,279 +425,35 @@
             return;
         }
         
+        if (!topologyCore) {
+            console.error('Topology core not initialized');
+            return;
+        }
+        
         console.log(`Loading topology data for cluster: ${currentClusterId}`);
         showLoading(true);
         
         try {
-            const url = `/api/network-topology?cluster_id=${currentClusterId}`;
-            console.log('Fetching topology from:', url);
+            await topologyCore.loadData(currentClusterId);
             
-            const response = await fetch(url);
-            console.log('Topology API response status:', response.status);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            // 更新统计信息
+            if (topologyCore.data.raw && topologyCore.data.raw.statistics) {
+                updateStatistics(topologyCore.data.raw.statistics);
             }
             
-            const data = await response.json();
-            console.log('Topology data:', data);
+            // 渲染拓扑图
+            topologyCore.render();
             
-            if (data.success) {
-                topologyData = data.data;
-                console.log('Topology data loaded successfully');
-                
-                if (topologyData && topologyData.statistics) {
-                    updateStatistics(topologyData.statistics);
-                }
-                
-                if (topologyData && (topologyData.nodes || topologyData.edges)) {
-                    renderTopology(topologyData);
-                } else {
-                    console.log('No topology data to render');
-                    showAlert('没有拓扑数据可显示', 'info');
-                    clearTopology();
-                }
-            } else {
-                const errorMsg = data.error || '未知错误';
-                console.error('Topology API error:', errorMsg);
-                showAlert('加载拓扑数据失败: ' + errorMsg, 'danger');
-                clearTopology();
-            }
+            console.log('Topology rendered successfully');
         } catch (error) {
             console.error('Error loading topology data:', error);
-            showAlert('网络错误，请检查连接: ' + error.message, 'danger');
-            clearTopology();
+            showAlert('加载拓扑数据失败: ' + error.message, 'danger');
         } finally {
             showLoading(false);
         }
     }
 
-    // 渲染拓扑图
-    function renderTopology(data) {
-        if (!data || !data.nodes || !data.edges) {
-            clearTopology();
-            return;
-        }
-        
-        // 清空现有内容
-        g.selectAll("*").remove();
-        
-        // 准备数据
-        const nodes = data.nodes.map(d => ({ ...d }));
-        const links = data.edges.map(d => ({ ...d }));
-        
-        // 创建链接
-        const link = g.append("g")
-            .selectAll("line")
-            .data(links)
-            .enter().append("line")
-            .attr("class", "topology-link")
-            .style("stroke", "#999")
-            .style("stroke-width", 2);
-        
-        // 创建节点组
-        const node = g.append("g")
-            .selectAll("g")
-            .data(nodes)
-            .enter().append("g")
-            .attr("class", "topology-node")
-            .call(d3.drag()
-                .on("start", dragstarted)
-                .on("drag", dragged)
-                .on("end", dragended))
-            .on("click", nodeClicked)
-            .on("mouseover", nodeMouseOver)
-            .on("mouseout", nodeMouseOut);
-        
-        // 添加节点圆圈
-        node.append("circle")
-            .attr("r", d => getNodeRadius(d.type))
-            .style("fill", d => nodeColors[d.type] || '#666')
-            .style("stroke", "#fff")
-            .style("stroke-width", 2);
-        
-        // 添加节点文本
-        node.append("text")
-            .attr("class", "topology-text")
-            .attr("dy", d => getNodeRadius(d.type) + 15)
-            .style("font-size", "11px")
-            .style("text-anchor", "middle")
-            .style("fill", "#333")
-            .text(d => d.name.length > 12 ? d.name.substring(0, 12) + '...' : d.name);
-        
-        // 添加状态指示器
-        node.filter(d => d.data.status === 'ACTIVE' || d.data.status === 'active')
-            .append("circle")
-            .attr("r", 4)
-            .attr("cx", d => getNodeRadius(d.type) - 5)
-            .attr("cy", d => -getNodeRadius(d.type) + 5)
-            .style("fill", "#28a745");
-        
-        // 更新仿真
-        simulation.nodes(nodes);
-        simulation.force("link").links(links);
-        simulation.alpha(1).restart();
-        
-        // 仿真tick事件
-        simulation.on("tick", () => {
-            link
-                .attr("x1", d => d.source.x)
-                .attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x)
-                .attr("y2", d => d.target.y);
-            
-            node.attr("transform", d => `translate(${d.x},${d.y})`);
-        });
-    }
 
-    // 获取节点半径
-    function getNodeRadius(type) {
-        const radii = {
-            network: 25,
-            router: 20,
-            instance: 18,
-            subnet: 15
-        };
-        return radii[type] || 15;
-    }
-
-    // 节点点击事件
-    async function nodeClicked(event, d) {
-        event.stopPropagation();
-        await showNodeDetail(d);
-    }
-
-    // 显示节点详细信息
-    async function showNodeDetail(node) {
-        try {
-            const response = await fetch(`/api/network-topology/nodes/${node.type}/${node.data.id}?cluster_id=${currentClusterId}`);
-            const data = await response.json();
-            
-            if (data.success) {
-                renderNodeInfo(data.data, node.type);
-                document.getElementById('nodeInfoPanel').style.display = 'block';
-            } else {
-                showAlert('获取节点详情失败: ' + data.error, 'warning');
-            }
-        } catch (error) {
-            console.error('Error loading node detail:', error);
-            showAlert('加载节点详情失败', 'danger');
-        }
-    }
-
-    // 渲染节点信息
-    function renderNodeInfo(data, type) {
-        const content = document.getElementById('nodeInfoContent');
-        
-        let html = `<h6><i class="fas fa-${getNodeIcon(type)} me-2"></i>${data.name || data.id}</h6>`;
-        
-        if (type === 'network') {
-            html += `
-                <div class="row">
-                    <div class="col-6">
-                        <small class="text-muted">状态:</small><br>
-                        <span class="badge ${data.status === 'ACTIVE' ? 'bg-success' : 'bg-secondary'}">${data.status}</span>
-                    </div>
-                    <div class="col-6">
-                        <small class="text-muted">类型:</small><br>
-                        ${data.external ? '外部网络' : '内部网络'}
-                    </div>
-                </div>
-                <hr>
-                <small class="text-muted">ID:</small><br>
-                <code>${data.id}</code>
-            `;
-        } else if (type === 'router') {
-            html += `
-                <div class="row">
-                    <div class="col-6">
-                        <small class="text-muted">状态:</small><br>
-                        <span class="badge ${data.status === 'ACTIVE' ? 'bg-success' : 'bg-secondary'}">${data.status}</span>
-                    </div>
-                    <div class="col-6">
-                        <small class="text-muted">外部网关:</small><br>
-                        ${data.external_gateway_info ? '已配置' : '未配置'}
-                    </div>
-                </div>
-                <hr>
-                <small class="text-muted">ID:</small><br>
-                <code>${data.id}</code>
-            `;
-        } else if (type === 'instance') {
-            html += `
-                <div class="row">
-                    <div class="col-6">
-                        <small class="text-muted">状态:</small><br>
-                        <span class="badge ${data.status === 'ACTIVE' ? 'bg-success' : 'bg-secondary'}">${data.status}</span>
-                    </div>
-                    <div class="col-6">
-                        <small class="text-muted">IP地址:</small><br>
-                        ${getInstanceIPs(data.addresses)}
-                    </div>
-                </div>
-                <hr>
-                <small class="text-muted">ID:</small><br>
-                <code>${data.id}</code>
-            `;
-        }
-        
-        content.innerHTML = html;
-    }
-
-    // 获取节点图标
-    function getNodeIcon(type) {
-        const icons = {
-            network: 'network-wired',
-            router: 'route',
-            instance: 'server',
-            subnet: 'layer-group'
-        };
-        return icons[type] || 'circle';
-    }
-
-    // 获取实例IP地址
-    function getInstanceIPs(addresses) {
-        if (!addresses) return 'N/A';
-        
-        const ips = [];
-        Object.values(addresses).forEach(networkAddresses => {
-            networkAddresses.forEach(addr => {
-                ips.push(addr.addr);
-            });
-        });
-        return ips.length > 0 ? ips.join(', ') : 'N/A';
-    }
-
-    // 节点鼠标悬停事件
-    function nodeMouseOver(event, d) {
-        d3.select(this).select("circle")
-            .style("stroke", "#333")
-            .style("stroke-width", 3);
-    }
-
-    function nodeMouseOut(event, d) {
-        d3.select(this).select("circle")
-            .style("stroke", "#fff")
-            .style("stroke-width", 2);
-    }
-
-    // 拖拽事件处理
-    function dragstarted(event, d) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-    }
-
-    function dragged(event, d) {
-        d.fx = event.x;
-        d.fy = event.y;
-    }
-
-    function dragended(event, d) {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
-    }
 
     // 更新统计信息
     function updateStatistics(stats) {
@@ -720,8 +465,8 @@
 
     // 清空拓扑图
     function clearTopology() {
-        if (g) {
-            g.selectAll("*").remove();
+        if (topologyCore && topologyCore.renderer && topologyCore.renderer.g) {
+            topologyCore.renderer.g.selectAll("*").remove();
         }
         updateStatistics({
             networks_count: 0,
@@ -734,7 +479,10 @@
 
     // 隐藏节点信息面板
     function hideNodeInfo() {
-        document.getElementById('nodeInfoPanel').style.display = 'none';
+        const panel = document.getElementById('nodeDetailPanel');
+        if (panel) {
+            panel.style.display = 'none';
+        }
     }
 
     // 刷新拓扑
@@ -744,25 +492,24 @@
             return;
         }
         
+        if (!topologyCore) {
+            showAlert('拓扑未初始化', 'danger');
+            return;
+        }
+        
         showLoading(true);
         
         try {
-            const response = await fetch(`/api/network-topology/refresh?cluster_id=${currentClusterId}`, {
-                method: 'POST'
-            });
-            const data = await response.json();
+            await topologyCore.refresh(currentClusterId);
             
-            if (data.success) {
-                topologyData = data.data;
-                updateStatistics(topologyData.statistics);
-                renderTopology(topologyData);
-                showAlert('拓扑数据已刷新', 'success');
-            } else {
-                showAlert('刷新拓扑失败: ' + data.error, 'danger');
+            if (topologyCore.data.raw && topologyCore.data.raw.statistics) {
+                updateStatistics(topologyCore.data.raw.statistics);
             }
+            
+            showAlert('拓扑数据已刷新', 'success');
         } catch (error) {
             console.error('Error refreshing topology:', error);
-            showAlert('刷新拓扑失败', 'danger');
+            showAlert('刷新拓扑失败: ' + error.message, 'danger');
         } finally {
             showLoading(false);
         }
@@ -770,58 +517,65 @@
 
     // 重置布局
     function resetLayout() {
-        if (topologyData && simulation) {
-            simulation.alpha(1).restart();
-            
-            // 重置缩放
-            const containerNode = document.getElementById("topologyContainer");
-            const width = containerNode.offsetWidth;
-            const height = containerNode.offsetHeight;
-            
-            svg.transition().duration(750).call(
-                zoom.transform,
-                d3.zoomIdentity.translate(0, 0).scale(1)
-            );
-            
-            // 重新居中
-            simulation.force("center", d3.forceCenter(width / 2, height / 2));
+        if (topologyCore && topologyCore.layout) {
+            topologyCore.layout.reset();
         }
     }
 
     // 缩放控制
     function zoomIn() {
-        svg.transition().duration(300).call(
-            zoom.scaleBy, 1.5
-        );
+        if (topologyCore && topologyCore.renderer && topologyCore.renderer.svg) {
+            const svg = topologyCore.renderer.svg;
+            const zoom = topologyCore.renderer.zoom;
+            if (zoom) {
+                svg.transition().duration(300).call(zoom.scaleBy, 1.5);
+            }
+        }
     }
 
     function zoomOut() {
-        svg.transition().duration(300).call(
-            zoom.scaleBy, 0.7
-        );
+        if (topologyCore && topologyCore.renderer && topologyCore.renderer.svg) {
+            const svg = topologyCore.renderer.svg;
+            const zoom = topologyCore.renderer.zoom;
+            if (zoom) {
+                svg.transition().duration(300).call(zoom.scaleBy, 0.7);
+            }
+        }
     }
 
     function fitToScreen() {
-        if (!topologyData || !topologyData.nodes.length) return;
+        if (!topologyCore || !topologyCore.data.nodes.length) return;
         
         const containerNode = document.getElementById("topologyContainer");
         const width = containerNode.offsetWidth;
         const height = containerNode.offsetHeight;
         
-        // 计算节点边界
-        const bounds = g.node().getBBox();
-        const fullWidth = bounds.width;
-        const fullHeight = bounds.height;
+        const svg = topologyCore.renderer.svg;
+        const g = topologyCore.renderer.g;
+        const zoom = topologyCore.renderer.zoom;
         
-        if (fullWidth === 0 || fullHeight === 0) return;
+        if (!g || !zoom) return;
         
-        const scale = Math.min(width / fullWidth, height / fullHeight) * 0.9;
-        const translate = [width / 2 - scale * (bounds.x + fullWidth / 2), height / 2 - scale * (bounds.y + fullHeight / 2)];
-        
-        svg.transition().duration(750).call(
-            zoom.transform,
-            d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
-        );
+        try {
+            const bounds = g.node().getBBox();
+            const fullWidth = bounds.width;
+            const fullHeight = bounds.height;
+            
+            if (fullWidth === 0 || fullHeight === 0) return;
+            
+            const scale = Math.min(width / fullWidth, height / fullHeight) * 0.9;
+            const translate = [
+                width / 2 - scale * (bounds.x + fullWidth / 2), 
+                height / 2 - scale * (bounds.y + fullHeight / 2)
+            ];
+            
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale)
+            );
+        } catch (error) {
+            console.error('Error fitting to screen:', error);
+        }
     }
 
     // 切换图例显示
@@ -860,17 +614,60 @@
 
     // 窗口大小变化时重新调整SVG
     window.addEventListener('resize', function() {
+        if (!topologyCore || !topologyCore.renderer) return;
+        
         const containerNode = document.getElementById("topologyContainer");
         const width = containerNode.offsetWidth;
         const height = containerNode.offsetHeight;
         
-        if (svg) {
-            svg.attr("width", width).attr("height", height);
-            
-            if (simulation) {
-                simulation.force("center", d3.forceCenter(width / 2, height / 2));
-            }
-        }
+        topologyCore.renderer.resize(width, height);
     });
+    
+    // 调试函数
+    function debugTopology() {
+        console.group('=== Topology Debug Info ===');
+        
+        console.log('1. Core Object:', topologyCore);
+        
+        if (topologyCore) {
+            console.log('2. Data:');
+            console.log('   - Nodes:', topologyCore.data.nodes);
+            console.log('   - Links:', topologyCore.data.links);
+            console.log('   - Raw:', topologyCore.data.raw);
+            
+            console.log('3. Statistics:');
+            const nodeCount = topologyCore.data.nodes?.length || 0;
+            const linkCount = topologyCore.data.links?.length || 0;
+            console.log(`   - ${nodeCount} nodes, ${linkCount} links`);
+            
+            if (topologyCore.data.nodes) {
+                const byType = {};
+                topologyCore.data.nodes.forEach(n => {
+                    byType[n.type] = (byType[n.type] || 0) + 1;
+                });
+                console.log('   - By type:', byType);
+            }
+            
+            console.log('4. Renderer:', topologyCore.renderer);
+            if (topologyCore.renderer && topologyCore.renderer.svg) {
+                const svgNodeCount = topologyCore.renderer.nodeGroup.selectAll('.node').size();
+                const svgLinkCount = topologyCore.renderer.linkGroup.selectAll('.link').size();
+                console.log(`   - SVG Elements: ${svgNodeCount} nodes, ${svgLinkCount} links`);
+            }
+            
+            console.log('5. Layout:', topologyCore.layout);
+            console.log('6. Interaction:', topologyCore.interaction);
+            console.log('7. Vertical Layout:', topologyCore.renderer?.verticalLayout);
+        } else {
+            console.error('topologyCore is not initialized!');
+        }
+        
+        console.log('8. Current Cluster ID:', currentClusterId);
+        
+        console.groupEnd();
+        
+        // 显示提示
+        showAlert('调试信息已输出到控制台，请按F12查看', 'info');
+    }
 </script>
 {% endblock %}

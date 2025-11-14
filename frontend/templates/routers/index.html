@@ -2,249 +2,422 @@
 
 {% block title %}路由管理 - {{ super() }}{% endblock %}
 
-{% block extra_css %}
+{% block extra_head %}
 <style>
-    .stats-card {
-        border-left: 4px solid #007bff;
-        transition: all 0.3s ease;
-    }
-    .stats-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    .router-status {
-        display: inline-block;
-        width: 12px;
-        height: 12px;
-        border-radius: 50%;
-        margin-right: 5px;
-    }
-    .router-status.ACTIVE { background-color: #28a745; }
-    .router-status.DOWN { background-color: #dc3545; }
-    .router-status.BUILD { background-color: #ffc107; }
-    .table-hover tbody tr:hover {
-        background-color: #f8f9fa;
-    }
-    .action-buttons .btn {
-        margin: 2px;
-    }
-    .filter-card {
-        border: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .batch-actions {
-        display: none;
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: white;
-        padding: 15px 20px;
+    /* 现代化表格样式 - 与实例管理保持一致 */
+    .routers-table-container {
+        background: #fff;
         border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        z-index: 1000;
-        border: 1px solid #dee2e6;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        overflow: hidden;
     }
+    
+    .routers-table {
+        margin-bottom: 0;
+    }
+    
+    .routers-table thead {
+        background: #fafafa;
+        border-bottom: 1px solid #e8e8e8;
+    }
+    
+    .routers-table thead th {
+        font-weight: 600;
+        color: #262626;
+        font-size: 14px;
+        padding: 16px 12px;
+        border: none;
+        white-space: nowrap;
+    }
+    
+    .routers-table tbody tr {
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s;
+    }
+    
+    .routers-table tbody tr:hover {
+        background-color: #fafafa;
+    }
+    
+    .routers-table tbody td {
+        padding: 16px 12px;
+        vertical-align: middle;
+        font-size: 14px;
+        color: #595959;
+    }
+    
+    /* 路由器名称样式 */
+    .router-name {
+        font-weight: 500;
+        color: #1890ff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .router-name:hover {
+        color: #40a9ff;
+        text-decoration: underline;
+    }
+    
+    .router-id {
+        font-size: 12px;
+        color: #8c8c8c;
+        font-family: 'Courier New', monospace;
+        margin-top: 2px;
+    }
+    
+    /* 状态标签 */
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    
+    .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    
+    .status-badge.status-active {
+        background: #f6ffed;
+        color: #52c41a;
+        border: 1px solid #b7eb8f;
+    }
+    
+    .status-badge.status-active .status-dot {
+        background: #52c41a;
+        box-shadow: 0 0 0 2px #f6ffed;
+    }
+    
+    .status-badge.status-down {
+        background: #fff1f0;
+        color: #ff4d4f;
+        border: 1px solid #ffccc7;
+    }
+    
+    .status-badge.status-down .status-dot {
+        background: #ff4d4f;
+    }
+    
+    .status-badge.status-build {
+        background: #e6f7ff;
+        color: #1890ff;
+        border: 1px solid #91d5ff;
+    }
+    
+    .status-badge.status-build .status-dot {
+        background: #1890ff;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
+    /* 操作按钮 */
+    .action-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .action-btn {
+        padding: 4px 12px;
+        font-size: 13px;
+        border-radius: 4px;
+        border: 1px solid #d9d9d9;
+        background: #fff;
+        color: #595959;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+    
+    .action-btn:hover {
+        color: #1890ff;
+        border-color: #1890ff;
+    }
+    
+    .action-btn.btn-success:hover {
+        color: #52c41a;
+        border-color: #52c41a;
+    }
+    
+    .action-btn.btn-danger:hover {
+        color: #ff4d4f;
+        border-color: #ff4d4f;
+    }
+    
+    /* 空状态 */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #8c8c8c;
+    }
+    
+    .empty-state i {
+        font-size: 64px;
+        color: #d9d9d9;
+        margin-bottom: 16px;
+    }
+    
+    .empty-state h5 {
+        color: #595959;
+        margin-bottom: 8px;
+    }
+    
+    /* 统计卡片优化 - 紧凑设计 */
+    .stats-overview {
+        margin-bottom: 1rem;
+    }
+    
+    .stats-overview .card {
+        border: none;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .stats-overview .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    
+    .stats-overview .card-body {
+        padding: 0.75rem 1rem;
+    }
+    
+    /* 紧凑的统计卡片布局 */
+    .stats-compact {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .stats-compact .stat-icon {
+        font-size: 1.5rem;
+        opacity: 0.9;
+    }
+    
+    .stats-compact .stat-content {
+        flex: 1;
+    }
+    
+    .stats-compact .stat-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        line-height: 1;
+        margin-bottom: 0.125rem;
+    }
+    
+    .stats-compact .stat-label {
+        font-size: 0.75rem;
+        opacity: 0.9;
+        line-height: 1;
+    }
+    
+    /* 过滤器样式优化 */
+    .filter-section {
+        background: #fff;
+        padding: 0.75rem 1rem;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        margin-bottom: 1rem;
+    }
+    
+    .form-label-sm {
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+        color: #595959;
+    }
+    
     .loading-overlay {
         display: none;
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(255, 255, 255, 0.8);
-        z-index: 2000;
-        justify-content: center;
-        align-items: center;
+    }
+    
+    /* 响应式优化 */
+    @media (max-width: 1200px) {
+        .routers-table {
+            font-size: 13px;
+        }
+        
+        .routers-table thead th,
+        .routers-table tbody td {
+            padding: 12px 8px;
+        }
+        
+        .stats-compact .stat-icon {
+            font-size: 1.25rem;
+        }
+        
+        .stats-compact .stat-value {
+            font-size: 1.25rem;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .stats-compact {
+            flex-direction: column;
+            text-align: center;
+            gap: 0.25rem;
+        }
+        
+        .stats-compact .stat-icon {
+            font-size: 1.5rem;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- 加载覆盖层 -->
-<div class="loading-overlay" id="loadingOverlay">
+<!-- 上下文信息栏和面包屑 -->
+{% include 'components/context-bar.html' %}
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-2 pb-2 mb-2 border-bottom">
+    <h1 class="h4 mb-0">
+        <i class="fas fa-route me-2"></i>路由管理
+    </h1>
+    <div class="btn-toolbar">
+        <button type="button" class="btn btn-sm btn-primary me-2" onclick="showCreateModal()">
+            <i class="fas fa-plus me-1"></i>创建路由器
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary me-2" onclick="refreshRouters()">
+            <i class="fas fa-sync-alt me-1"></i>刷新
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-info" onclick="exportRouters()">
+            <i class="fas fa-download me-1"></i>导出
+        </button>
+    </div>
+</div>
+
+<!-- 加载指示器 -->
+<div id="loadingIndicator" class="text-center py-4 loading-overlay">
     <div class="spinner-border text-primary" role="status">
         <span class="visually-hidden">加载中...</span>
     </div>
+    <p class="mt-2 text-muted">正在加载路由器信息...</p>
 </div>
 
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">
-        <i class="fas fa-route me-2"></i>路由管理
-    </h1>
-    <div class="btn-toolbar mb-2 mb-md-0">
-        <div class="btn-group me-2">
-            <button type="button" class="btn btn-outline-secondary" onclick="refreshRouters()">
-                <i class="fas fa-sync-alt me-1"></i>刷新
-            </button>
-        </div>
-        <div class="btn-group me-2">
-            <button type="button" class="btn btn-outline-primary" onclick="showCreateModal()">
-                <i class="fas fa-plus me-1"></i>创建路由器
-            </button>
-        </div>
-        <div class="btn-group">
-            <button type="button" class="btn btn-outline-info" onclick="exportRouters()">
-                <i class="fas fa-download me-1"></i>导出
-            </button>
-        </div>
-    </div>
-</div>
+<!-- 集群选择器 -->
+{% include 'components/cluster-selector-inline.html' %}
 
-<!-- 统计卡片 -->
-<div class="row mb-4" id="statsCards">
-    <div class="col-md-3">
-        <div class="card stats-card">
-            <div class="card-body text-center">
-                <h5 class="card-title text-primary">总路由器</h5>
-                <h2 class="text-primary" id="totalRouters">-</h2>
+<!-- 统计概览 - 紧凑设计 -->
+<div class="stats-overview">
+    <div class="row g-2 mb-2">
+        <div class="col-6 col-md-4">
+            <div class="card bg-info text-white stat-card-clickable" data-filter-status="" onclick="filterByStatus('')" role="button" tabindex="0">
+                <div class="card-body">
+                    <div class="stats-compact">
+                        <i class="fas fa-route stat-icon"></i>
+                        <div class="stat-content">
+                            <div class="stat-value" id="totalRouters">-</div>
+                            <div class="stat-label">总路由器</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stats-card">
-            <div class="card-body text-center">
-                <h5 class="card-title text-success">运行中</h5>
-                <h2 class="text-success" id="activeRouters">-</h2>
+        <div class="col-6 col-md-4">
+            <div class="card bg-success text-white stat-card-clickable" data-filter-status="ACTIVE" onclick="filterByStatus('ACTIVE')" role="button" tabindex="0">
+                <div class="card-body">
+                    <div class="stats-compact">
+                        <i class="fas fa-check-circle stat-icon"></i>
+                        <div class="stat-content">
+                            <div class="stat-value" id="activeRouters">-</div>
+                            <div class="stat-label">运行中</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stats-card">
-            <div class="card-body text-center">
-                <h5 class="card-title text-danger">停止</h5>
-                <h2 class="text-danger" id="downRouters">-</h2>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card stats-card">
-            <div class="card-body text-center">
-                <h5 class="card-title text-info">当前集群</h5>
-                <h6 class="text-info" id="currentCluster">-</h6>
+        <div class="col-6 col-md-4">
+            <div class="card bg-danger text-white stat-card-clickable" data-filter-status="DOWN" onclick="filterByStatus('DOWN')" role="button" tabindex="0">
+                <div class="card-body">
+                    <div class="stats-compact">
+                        <i class="fas fa-times-circle stat-icon"></i>
+                        <div class="stat-content">
+                            <div class="stat-value" id="downRouters">-</div>
+                            <div class="stat-label">停止</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 过滤和搜索 -->
-<div class="row mb-4">
-    <div class="col-md-12">
-        <div class="card filter-card">
-            <div class="card-body">
-                <form id="filterForm" class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label">集群</label>
-                        <select class="form-select" id="clusterSelect" name="cluster_id" onchange="onClusterChange()">
-                            <option value="">加载中...</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">状态</label>
-                        <select class="form-select" id="statusFilter" name="status">
-                            <option value="">全部状态</option>
-                            <option value="ACTIVE">运行中</option>
-                            <option value="DOWN">停止</option>
-                            <option value="ERROR">错误</option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">搜索</label>
-                        <input type="text" class="form-control" id="searchInput" name="search" placeholder="路由器名称或ID">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">每页显示</label>
-                        <select class="form-select" id="perPageSelect" name="per_page">
-                            <option value="20">20</option>
-                            <option value="50">50</option>
-                            <option value="100">100</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="button" class="btn btn-primary w-100" onclick="applyFilters()">
-                            <i class="fas fa-search me-1"></i>搜索
-                        </button>
-                    </div>
-                </form>
-            </div>
+<!-- 过滤器 - 紧凑设计 -->
+<div class="filter-section" id="filterSection" style="display: none;">
+    <div class="row g-2">
+        <div class="col-md-3">
+            <label class="form-label form-label-sm">状态</label>
+            <select class="form-select form-select-sm" id="statusFilter" onchange="applyFilters()">
+                <option value="">全部状态</option>
+                <option value="ACTIVE">运行中</option>
+                <option value="DOWN">停止</option>
+                <option value="ERROR">错误</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label form-label-sm">搜索</label>
+            <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="路由器名称或ID..." onkeyup="debounceSearch()">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label form-label-sm">每页显示</label>
+            <select class="form-select form-select-sm" id="perPageSelect" onchange="applyFilters()">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+            </select>
         </div>
     </div>
 </div>
 
 <!-- 路由器列表 -->
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">路由器列表</h5>
-        <div class="d-flex align-items-center">
-            <div class="form-check me-3">
-                <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll()">
-                <label class="form-check-label" for="selectAll">全选</label>
-            </div>
-            <small class="text-muted" id="selectedCount">已选择: 0</small>
-        </div>
+<div class="routers-table-container" id="routersCard" style="display: none;">
+    <div class="table-responsive">
+        <table class="table routers-table">
+            <thead>
+                <tr>
+                    <th style="min-width: 200px;">名称/ID</th>
+                    <th style="min-width: 100px;">状态</th>
+                    <th style="min-width: 150px;">外部网关</th>
+                    <th style="min-width: 100px;">管理状态</th>
+                    <th style="min-width: 80px;">端口数</th>
+                    <th style="min-width: 150px;">创建时间</th>
+                    <th style="min-width: 200px;" class="text-center">操作</th>
+                </tr>
+            </thead>
+            <tbody id="routersTableBody">
+                <!-- 表格行将通过JavaScript动态加载 -->
+            </tbody>
+        </table>
     </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-hover mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th width="50px">
-                            <input type="checkbox" class="form-check-input" id="headerCheckbox">
-                        </th>
-                        <th>名称</th>
-                        <th>状态</th>
-                        <th>外部网关</th>
-                        <th>管理状态</th>
-                        <th>端口数</th>
-                        <th>集群</th>
-                        <th>创建时间</th>
-                        <th width="200px">操作</th>
-                    </tr>
-                </thead>
-                <tbody id="routersTableBody">
-                    <tr>
-                        <td colspan="9" class="text-center py-4">
-                            <div class="spinner-border text-primary" role="status">
-                                <span class="visually-hidden">加载中...</span>
-                            </div>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
+    
+    <!-- 空状态 -->
+    <div id="emptyState" class="empty-state" style="display: none;">
+        <i class="fas fa-route"></i>
+        <h5>暂无路由器</h5>
+        <p>请选择一个集群查看路由器列表，或创建新的路由器</p>
     </div>
 </div>
 
 <!-- 分页 -->
-<nav aria-label="路由器分页" class="mt-4">
-    <div class="d-flex justify-content-between align-items-center">
-        <div class="text-muted" id="paginationInfo">
-            显示 0 - 0 条，共 0 条记录
-        </div>
-        <ul class="pagination mb-0" id="pagination">
-            <!-- 分页按钮将通过JavaScript生成 -->
-        </ul>
-    </div>
+<nav class="mt-4" id="paginationContainer" style="display: none;">
+    <ul class="pagination justify-content-center" id="pagination">
+    </ul>
 </nav>
-
-<!-- 批量操作面板 -->
-<div class="batch-actions" id="batchActions">
-    <div class="d-flex align-items-center gap-2">
-        <span class="me-3">批量操作:</span>
-        <button type="button" class="btn btn-sm btn-success" onclick="batchAction('enable')">
-            <i class="fas fa-play me-1"></i>启用
-        </button>
-        <button type="button" class="btn btn-sm btn-warning" onclick="batchAction('disable')">
-            <i class="fas fa-pause me-1"></i>禁用
-        </button>
-        <button type="button" class="btn btn-sm btn-danger" onclick="batchAction('delete')">
-            <i class="fas fa-trash me-1"></i>删除
-        </button>
-        <button type="button" class="btn btn-sm btn-secondary" onclick="clearSelection()">
-            <i class="fas fa-times me-1"></i>取消
-        </button>
-    </div>
-</div>
 
 <!-- 模态框区域 -->
 <div id="modalArea">
@@ -312,5 +485,381 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='js/routers.js') }}"></script>
+<script>
+    let currentClusterId = null;
+    let currentPage = 1;
+    let currentFilters = {};
+    let isLoading = false;
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('DOM loaded, initializing routers page...');
+        
+        // 初始化集群选择器
+        initInlineClusterSelector(onClusterChange, '查看路由器列表');
+        
+        initializePage();
+    });
+    
+    // 初始化页面
+    async function initializePage() {
+        // 显示相关界面元素
+        const filterSection = document.getElementById('filterSection');
+        const routersCard = document.getElementById('routersCard');
+        
+        if (filterSection) filterSection.style.display = 'block';
+        if (routersCard) routersCard.style.display = 'block';
+    }
+    
+    // 防抖搜索
+    let searchTimeout = null;
+    function debounceSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            applyFilters();
+        }, 500);
+    }
+    
+    // 按状态过滤
+    function filterByStatus(status) {
+        document.getElementById('statusFilter').value = status;
+        applyFilters();
+    }
+    
+    // 应用过滤器
+    function applyFilters() {
+        currentFilters = {
+            status: document.getElementById('statusFilter').value,
+            search: document.getElementById('searchInput').value
+        };
+        
+        // 过滤掉空值
+        Object.keys(currentFilters).forEach(key => {
+            if (!currentFilters[key]) {
+                delete currentFilters[key];
+            }
+        });
+        
+        currentPage = 1;
+        loadRouters();
+    }
+    
+    // 集群选择变化回调
+    function onClusterChange(clusterId) {
+        console.log('路由管理 - 集群选择变化:', clusterId);
+        currentClusterId = clusterId;
+        currentPage = 1;
+        
+        if (!currentClusterId) {
+            const tbody = document.getElementById('routersTableBody');
+            const emptyState = document.getElementById('emptyState');
+            if (tbody) {
+                tbody.innerHTML = '';
+            }
+            if (emptyState) {
+                emptyState.style.display = 'block';
+                emptyState.innerHTML = `
+                    <i class="fas fa-route"></i>
+                    <h5>请选择集群</h5>
+                    <p>请先选择一个集群查看路由器列表</p>
+                `;
+            }
+            clearStatistics();
+        } else {
+            loadRouters();
+            loadExternalNetworks();
+        }
+    }
+    
+    // 清空统计
+    function clearStatistics() {
+        document.getElementById('totalRouters').textContent = '-';
+        document.getElementById('activeRouters').textContent = '-';
+        document.getElementById('downRouters').textContent = '-';
+    }
+    
+    // 加载路由器列表
+    async function loadRouters(page = 1) {
+        if (!currentClusterId) return;
+        
+        showLoading(true);
+        
+        try {
+            const params = new URLSearchParams({
+                cluster_id: currentClusterId,
+                page: page,
+                per_page: document.getElementById('perPageSelect')?.value || 20,
+                ...currentFilters
+            });
+            
+            const response = await fetch(`/api/routers?${params}`);
+            const data = await response.json();
+            
+            if (data.success) {
+                updateStatistics(data.statistics);
+                renderRoutersTable(data.data);
+                
+                if (data.pagination) {
+                    renderPagination(data.pagination.page, data.pagination.pages, data.pagination.total);
+                }
+            } else {
+                showAlert('加载路由器失败: ' + data.error, 'danger');
+                clearRoutersTable();
+            }
+        } catch (error) {
+            console.error('Error loading routers:', error);
+            showAlert('网络错误，请检查连接', 'danger');
+            clearRoutersTable();
+        } finally {
+            showLoading(false);
+        }
+    }
+    
+    // 渲染路由器表格
+    function renderRoutersTable(routers) {
+        const tbody = document.getElementById('routersTableBody');
+        const emptyState = document.getElementById('emptyState');
+        
+        if (!routers || routers.length === 0) {
+            tbody.innerHTML = '';
+            emptyState.style.display = 'block';
+            return;
+        }
+        
+        emptyState.style.display = 'none';
+        
+        tbody.innerHTML = routers.map(router => {
+            const statusBadge = getStatusBadge(router.status);
+            const adminStateBadge = router.admin_state_up 
+                ? '<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>启用</span>' 
+                : '<span class="badge bg-secondary"><i class="fas fa-pause-circle me-1"></i>禁用</span>';
+            
+            const gatewayInfo = router.external_gateway_info 
+                ? '<i class="fas fa-check-circle text-success" title="已配置"></i> 已配置' 
+                : '<i class="fas fa-times-circle text-muted" title="未配置"></i> 未配置';
+            
+            return `
+                <tr>
+                    <td>
+                        <div class="router-name" onclick="showRouterDetail('${router.id}')">
+                            <i class="fas fa-route"></i>
+                            <div>
+                                <div>${escapeHtml(router.name)}</div>
+                                <div class="router-id">${router.id}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${statusBadge}</td>
+                    <td><small>${gatewayInfo}</small></td>
+                    <td>${adminStateBadge}</td>
+                    <td><span class="badge bg-info">${router.ports_count || 0}</span></td>
+                    <td><small>${formatDateTime(router.created_at)}</small></td>
+                    <td class="text-center">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-primary" onclick="showRouterDetail('${router.id}')" title="详情">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="action-btn btn-success" onclick="toggleAdminState('${router.id}', ${router.admin_state_up})" title="${router.admin_state_up ? '禁用' : '启用'}">
+                                <i class="fas fa-${router.admin_state_up ? 'pause' : 'play'}"></i>
+                            </button>
+                            <button class="action-btn btn-danger" onclick="deleteRouter('${router.id}', '${escapeHtml(router.name)}')" title="删除">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+    
+    // 获取状态徽章
+    function getStatusBadge(status) {
+        const statusUpper = status?.toUpperCase() || '';
+        const statusMap = {
+            'ACTIVE': { class: 'status-active', label: '运行中', icon: true },
+            'DOWN': { class: 'status-down', label: '停止', icon: false },
+            'BUILD': { class: 'status-build', label: '构建中', icon: true },
+            'ERROR': { class: 'status-down', label: '错误', icon: false }
+        };
+        
+        const statusInfo = statusMap[statusUpper] || { class: 'status-down', label: status, icon: false };
+        const dotHtml = statusInfo.icon ? '<span class="status-dot"></span>' : '';
+        
+        return `<span class="status-badge ${statusInfo.class}">${dotHtml}${statusInfo.label}</span>`;
+    }
+    
+    // 更新统计信息
+    function updateStatistics(statistics) {
+        document.getElementById('totalRouters').textContent = statistics?.total_routers || '0';
+        document.getElementById('activeRouters').textContent = statistics?.status_counts?.ACTIVE || '0';
+        document.getElementById('downRouters').textContent = statistics?.status_counts?.DOWN || '0';
+    }
+    
+    // 渲染分页
+    function renderPagination(currentPage, totalPages, totalItems) {
+        const container = document.getElementById('paginationContainer');
+        const list = document.getElementById('pagination');
+        
+        if (totalPages <= 1) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'block';
+        
+        let html = '';
+        
+        // 上一页
+        if (currentPage > 1) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${currentPage - 1}); return false;">&laquo; 上一页</a></li>`;
+        } else {
+            html += `<li class="page-item disabled"><span class="page-link">&laquo; 上一页</span></li>`;
+        }
+        
+        // 页码
+        const startPage = Math.max(1, currentPage - 2);
+        const endPage = Math.min(totalPages, currentPage + 2);
+        
+        if (startPage > 1) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1); return false;">1</a></li>`;
+            if (startPage > 2) {
+                html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const activeClass = i === currentPage ? 'active' : '';
+            html += `<li class="page-item ${activeClass}"><a class="page-link" href="#" onclick="changePage(${i}); return false;">${i}</a></li>`;
+        }
+        
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${totalPages}); return false;">${totalPages}</a></li>`;
+        }
+        
+        // 下一页
+        if (currentPage < totalPages) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${currentPage + 1}); return false;">下一页 &raquo;</a></li>`;
+        } else {
+            html += `<li class="page-item disabled"><span class="page-link">下一页 &raquo;</span></li>`;
+        }
+        
+        list.innerHTML = html;
+    }
+    
+    // 换页
+    function changePage(page) {
+        currentPage = page;
+        loadRouters(page);
+    }
+    
+    // 清空路由器列表
+    function clearRoutersTable() {
+        const tbody = document.getElementById('routersTableBody');
+        const emptyState = document.getElementById('emptyState');
+        const container = document.getElementById('paginationContainer');
+        
+        if (tbody) tbody.innerHTML = '';
+        if (emptyState) {
+            emptyState.style.display = 'block';
+            emptyState.innerHTML = `
+                <i class="fas fa-route"></i>
+                <h5>请选择集群</h5>
+                <p>请先选择一个集群查看路由器列表</p>
+            `;
+        }
+        if (container) container.style.display = 'none';
+        
+        clearStatistics();
+    }
+    
+    // 工具函数
+    function formatDateTime(dateString) {
+        if (!dateString) return 'N/A';
+        try {
+            return new Date(dateString).toLocaleString('zh-CN');
+        } catch (e) {
+            return dateString;
+        }
+    }
+    
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    function showLoading(show) {
+        const indicator = document.getElementById('loadingIndicator');
+        if (show) {
+            indicator.style.display = 'block';
+        } else {
+            indicator.style.display = 'none';
+        }
+        isLoading = show;
+    }
+    
+    function showAlert(message, type) {
+        // 移除现有的alert
+        const existingAlerts = document.querySelectorAll('.alert');
+        existingAlerts.forEach(alert => alert.remove());
+        
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        
+        const content = document.querySelector('main');
+        content.insertBefore(alertDiv, content.firstChild);
+        
+        // 自动删除
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
+    
+    // 占位函数
+    function showCreateModal() {
+        showAlert('创建路由器功能开发中...', 'info');
+    }
+    
+    function refreshRouters() {
+        if (!currentClusterId) {
+            showAlert('请先选择一个集群', 'warning');
+            return;
+        }
+        currentPage = 1;
+        loadRouters();
+    }
+    
+    function showRouterDetail(routerId) {
+        showAlert('路由器详情功能开发中...', 'info');
+    }
+    
+    function toggleAdminState(routerId, currentState) {
+        showAlert('切换管理状态功能开发中...', 'info');
+    }
+    
+    function deleteRouter(routerId, routerName) {
+        if (confirm(`确定要删除路由器 "${routerName}" 吗？`)) {
+            showAlert('删除路由器功能开发中...', 'info');
+        }
+    }
+    
+    function exportRouters() {
+        showAlert('导出功能开发中...', 'info');
+    }
+    
+    function loadExternalNetworks() {
+        // 加载外部网络列表（用于创建路由器）
+        console.log('Loading external networks...');
+    }
+</script>
 {% endblock %}

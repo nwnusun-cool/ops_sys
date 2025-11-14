@@ -128,10 +128,15 @@
         </div>
       </div>
       
-      <!-- 刷新按钮 -->
-      <button class="btn btn-sm btn-outline-primary" id="refresh-btn">
-        <i class="fas fa-sync-alt"></i>
-      </button>
+      <!-- 刷新控制 -->
+      <div class="refresh-controls">
+        <button class="btn btn-sm btn-outline-primary" id="refresh-btn">
+          <i class="fas fa-sync-alt"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-success" id="auto-refresh-toggle" title="自动刷新">
+          <i class="fas fa-play"></i>
+        </button>
+      </div>
     </div>
   </div>
 
@@ -151,9 +156,10 @@
             <th width="50">类型</th>
             <th>名称</th>
             <th>命名空间</th>
+            <th width="120">状态</th>
             <th>副本状态</th>
             <th>创建时间</th>
-            <th width="120">操作</th>
+            <th width="200">操作</th>
           </tr>
         </thead>
         <tbody id="workloads-table-body">

@@ -6,10 +6,12 @@ let usersData = [];
 let currentPage = 1;
 let totalPages = 1;
 let selectedUsers = new Set();
+let rolesData = [];
 
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Users page loaded');
+    loadRoles(); // 先加载角色数据
     loadUsers();
     setupEventListeners();
 });
@@ -40,6 +42,86 @@ function setupEventListeners() {
             applyFilters();
         }
     });
+}
+
+// 加载角色列表
+async function loadRoles() {
+    try {
+        const response = await fetch('/api/roles?is_active=true');
+        const data = await response.json();
+        
+        if (data.success) {
+            rolesData = data.data;
+            updateRoleSelects();
+        } else {
+            console.error('Failed to load roles:', data.error);
+            // 如果新角色系统失败，使用默认角色
+            useDefaultRoles();
+        }
+    } catch (error) {
+        console.error('Error loading roles:', error);
+        // 如果新角色系统失败，使用默认角色
+        useDefaultRoles();
+    }
+}
+
+// 使用默认角色（兼容旧系统）
+function useDefaultRoles() {
+    rolesData = [
+        { code: 'viewer', name: '查看者', level: 20 },
+        { code: 'operator', name: '操作员', level: 60 },
+        { code: 'admin', name: '管理员', level: 80 },
+        { code: 'super_admin', name: '超级管理员', level: 100 }
+    ];
+    updateRoleSelects();
+}
+
+// 更新角色选择框
+function updateRoleSelects() {
+    const roleSelects = ['roleFilter', 'createRole', 'editRole'];
+    
+    roleSelects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        
+        // 保存当前选中的值
+        const currentValue = select.value;
+        
+        // 清空选项（保留第一个默认选项）
+        const firstOption = select.firstElementChild;
+        select.innerHTML = '';
+        if (firstOption) {
+            select.appendChild(firstOption);
+        }
+        
+        // 按等级排序角色（等级高的在前）
+        const sortedRoles = [...rolesData].sort((a, b) => (b.level || 0) - (a.level || 0));
+        
+        // 添加角色选项
+        sortedRoles.forEach(role => {
+            const option = document.createElement('option');
+            option.value = role.code;
+            option.textContent = role.name;
+            
+            // 如果是系统角色，添加标识
+            if (role.is_system) {
+                option.textContent += ' (系统)';
+            }
+            
+            select.appendChild(option);
+        });
+        
+        // 恢复选中值
+        if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+            select.value = currentValue;
+        }
+    });
+}
+
+// 获取角色显示名称
+function getRoleDisplayName(roleCode) {
+    const role = rolesData.find(r => r.code === roleCode);
+    return role ? role.name : roleCode;
 }
 
 // 加载用户列表
@@ -273,6 +355,11 @@ function showCreateModal() {
     // 重置表单
     document.getElementById('createUserForm').reset();
     document.getElementById('createIsActive').checked = true;
+    
+    // 确保角色选项已加载
+    if (rolesData.length === 0) {
+        loadRoles();
+    }
     
     // 显示模态框
     const modal = new bootstrap.Modal(document.getElementById('createUserModal'));

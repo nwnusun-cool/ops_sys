@@ -7,6 +7,7 @@ from datetime import datetime
 from flask import request, jsonify
 from flask_login import login_required, current_user
 from . import api_bp as api
+from .helpers import get_cluster_id_from_request
 from app.models.base import db
 from app.models.cluster import OpenstackCluster
 from app.models.log import OperationLog
@@ -14,13 +15,58 @@ from app.services.openstack_service import openstack_service
 
 logger = logging.getLogger(__name__)
 
+def get_instance_image_info(server, clients):
+    """
+    获取实例的镜像信息
+    对于从卷启动的实例，尝试从卷元数据中获取镜像名称
+    """
+    try:
+        if server.image:
+            # 实例有关联的镜像，直接获取镜像信息
+            glance_client = clients['glance']
+            image_obj = glance_client.images.get(server.image['id'])
+            return {
+                'id': image_obj.id,
+                'name': image_obj.name
+            }
+        else:
+            # 从卷启动的实例，尝试从卷元数据获取镜像名称
+            image_name = '从卷启动'
+            volumes_attached = getattr(server, 'os-extended-volumes:volumes_attached', [])
+            
+            if volumes_attached:
+                try:
+                    # 获取第一个挂载的卷（通常是启动卷）
+                    cinder_client = clients['cinder']
+                    volume_id = volumes_attached[0]['id']
+                    volume = cinder_client.volumes.get(volume_id)
+                    
+                    # 从卷的元数据中获取镜像名称
+                    volume_metadata = getattr(volume, 'volume_image_metadata', {})
+                    if volume_metadata and 'image_name' in volume_metadata:
+                        image_name = volume_metadata['image_name']
+                        logger.debug(f"Found image name from volume metadata for instance {server.name}: {image_name}")
+                except Exception as ve:
+                    logger.debug(f"Failed to get image name from volume for instance {server.name}: {ve}")
+            
+            return {
+                'id': None,
+                'name': image_name
+            }
+    except Exception as e:
+        logger.warning(f"Failed to get image details for instance {server.name}: {e}")
+        return {
+            'id': server.image['id'] if server.image else None,
+            'name': 'Unknown' if server.image else '从卷启动'
+        }
+
 @api.route('/instances', methods=['GET'])
 @login_required
 def list_instances():
     """获取实例列表"""
     try:
-        # 获取查询参数
-        cluster_id = request.args.get('cluster_id', type=int)
+        # 获取查询参数 - 优先从session读取cluster_id
+        cluster_id = get_cluster_id_from_request()
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         status = request.args.get('status')
@@ -83,6 +129,50 @@ def list_instances():
                 except Exception:
                     pass
             
+            
+            # 获取完整的flavor信息
+            try:
+                clients = openstack_service.get_cluster_clients(cluster.id)
+                nova_client = clients['nova']
+                flavor_obj = nova_client.flavors.get(server.flavor['id'])
+                flavor_data = {
+                    'id': flavor_obj.id,
+                    'name': flavor_obj.name,
+                    'vcpus': flavor_obj.vcpus,
+                    'ram': flavor_obj.ram,
+                    'disk': flavor_obj.disk
+                }
+            except Exception as e:
+                logger.warning(f"Failed to get flavor details for {server.flavor['id']}: {e}")
+                flavor_data = {
+                    'id': server.flavor['id'],
+                    'name': 'Unknown',
+                    'vcpus': 0,
+                    'ram': 0,
+                    'disk': 0
+                }
+            
+            # 获取完整的image信息
+            try:
+                # if server.image:
+                #     glance_client = clients['glance']
+                #     image_obj = glance_client.images.get(server.image['id'])
+                #     image_data = {
+                #         'id': image_obj.id,
+                #         'name': image_obj.name
+                #     }
+                # else:
+                #     image_data = {
+                #         'id': None,
+                #         'name': '从卷启动'
+                #     }
+                image_data = get_instance_image_info(server, clients)
+            except Exception as e:
+                logger.warning(f"Failed to get image details: {e}")
+                image_data = {
+                    'id': server.image['id'] if server.image else None,
+                    'name': 'Unknown' if server.image else '从卷启动'
+                }
             instance_data = {
                 'id': server.id,
                 'name': server.name,
@@ -94,14 +184,8 @@ def list_instances():
                 'updated': server.updated,
                 'cluster_id': cluster.id,
                 'cluster_name': cluster.name,
-                'flavor': {
-                    'id': server.flavor['id'],
-                    'name': getattr(server.flavor, 'name', 'Unknown')
-                },
-                'image': {
-                    'id': server.image['id'] if server.image else None,
-                    'name': getattr(server.image, 'name', 'Unknown') if server.image else 'Boot from volume'
-                },
+                'flavor': flavor_data,
+                'image': image_data,
                 'key_name': getattr(server, 'key_name', None),
                 'availability_zone': getattr(server, 'OS-EXT-AZ:availability_zone', None),
                 'host': getattr(server, 'OS-EXT-SRV-ATTR:host', None),
@@ -182,7 +266,7 @@ def list_instances():
 def get_instance_detail(instance_id):
     """获取实例详细信息"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -197,8 +281,14 @@ def get_instance_detail(instance_id):
         try:
             console_log = nova_client.servers.get_console_output(instance_id, length=50)
         except Exception as e:
-            logger.warning(f"Failed to get console log for instance {instance_id}: {e}")
-            console_log = "Unable to retrieve console log"
+            error_msg = str(e)
+            # 如果是409错误（实例未就绪），这是正常的，使用debug级别
+            if '409' in error_msg or 'not ready' in error_msg.lower():
+                logger.debug(f"Console log not yet available for instance {instance_id}: {e}")
+                console_log = "控制台日志尚未就绪，实例正在启动中..."
+            else:
+                logger.warning(f"Failed to get console log for instance {instance_id}: {e}")
+                console_log = "无法获取控制台日志"
         
         # 详细实例信息
         instance_detail = {
@@ -250,7 +340,7 @@ def get_instance_detail(instance_id):
 def instance_action(instance_id):
     """执行实例操作"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -355,7 +445,7 @@ def instance_action(instance_id):
 def get_instance_console(instance_id):
     """获取实例控制台"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         console_type = request.args.get('type', 'vnc')  # vnc, spice, rdp, serial
         
         if not cluster_id:
@@ -393,7 +483,7 @@ def get_instance_console(instance_id):
 def rename_instance(instance_id):
     """重命名实例"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -604,7 +694,7 @@ def batch_instance_action_cross_cluster():
 def batch_instance_action():
     """批量实例操作"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -703,7 +793,7 @@ def export_instances():
         from io import BytesIO
         from datetime import datetime
         
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -788,9 +878,14 @@ def export_instances():
         filename = f"instances_{cluster.name}_{timestamp}.xlsx"
         
         from flask import make_response
+        from urllib.parse import quote
+        
         response = make_response(output.read())
         response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        # 使用URL编码处理中文文件名
+        encoded_filename = quote(filename)
+        response.headers['Content-Disposition'] = f'attachment; filename*=UTF-8\'\'{encoded_filename}'
         
         return response
         
@@ -803,7 +898,7 @@ def export_instances():
 def set_destroy_timer(instance_id):
     """设置实例销毁时间"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -859,7 +954,7 @@ def set_destroy_timer(instance_id):
 def check_expired_instances():
     """检查到期的实例"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -926,7 +1021,7 @@ def check_expired_instances():
 def get_create_data():
     """获取创建实例所需的数据"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -1093,7 +1188,7 @@ def get_create_data():
 def create_instance():
     """创建实例"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -1102,7 +1197,13 @@ def create_instance():
             return jsonify({'success': False, 'error': '缺少请求数据'}), 400
         
         # 验证必填字段
-        required_fields = ['name', 'image_id', 'flavor_id', 'networks']
+        boot_source = data.get('boot_source', 'image')
+        required_fields = ['name', 'flavor_id', 'networks']
+        
+        # 根据启动源类型验证不同的字段
+        if boot_source == 'image' and not data.get('block_device_mapping_v2'):
+            required_fields.append('image_id')
+        
         for field in required_fields:
             if not data.get(field):
                 return jsonify({'success': False, 'error': f'缺少必填字段: {field}'}), 400
@@ -1114,10 +1215,22 @@ def create_instance():
         # 构建创建参数
         instance_params = {
             'name': data['name'],
-            'image': data['image_id'],
             'flavor': data['flavor_id'],
             'nics': []
         }
+        
+        # 处理启动源
+        if data.get('block_device_mapping_v2'):
+            # 使用块设备映射（从卷启动或创建新卷）
+            instance_params['block_device_mapping_v2'] = data['block_device_mapping_v2']
+            # 注意：使用block_device_mapping_v2时，仍需提供image参数（设为空字符串）
+            # 这是novaclient的要求，即使image不会被使用
+            instance_params['image'] = ''
+        elif data.get('image_id'):
+            # 传统方式：从镜像启动
+            instance_params['image'] = data['image_id']
+        else:
+            return jsonify({'success': False, 'error': '必须指定镜像或卷'}), 400
         
         # 处理网络配置
         for network_id in data['networks']:
@@ -1157,13 +1270,28 @@ def create_instance():
         server = nova_client.servers.create(**instance_params)
         
         # 记录操作日志
+        # 构建详细信息，根据启动源类型显示不同的信息
+        boot_source = data.get('boot_source', 'image')
+        if boot_source == 'image' and data.get('image_id'):
+            source_info = f'镜像: {data["image_id"]}'
+        elif boot_source == 'volume':
+            bdm = data.get('block_device_mapping_v2', [{}])[0]
+            source_info = f'卷: {bdm.get("uuid", "unknown")}'
+        elif boot_source == 'snapshot':
+            bdm = data.get('block_device_mapping_v2', [{}])[0]
+            source_info = f'卷快照: {bdm.get("uuid", "unknown")}'
+        elif boot_source == 'instance_snapshot':
+            source_info = f'实例快照: {data.get("image_id", "unknown")}'
+        else:
+            source_info = '未知启动源'
+        
         OperationLog.log_operation(
             user_id=current_user.id,
             cluster_id=cluster_id,
             operation_type='instance_create',
             operation_object=f'instance:{data["name"]}',
             result='success',
-            details=f'创建实例: {data["name"]}, 镜像: {data["image_id"]}, 规格: {data["flavor_id"]}'
+            details=f'创建实例: {data["name"]}, {source_info}, 规格: {data["flavor_id"]}'
         )
         
         return jsonify({
@@ -1181,6 +1309,9 @@ def create_instance():
         error_msg = str(e)
         logger.error(f"Failed to create instance: {error_msg}")
         
+        # 将OpenStack错误转换为用户友好的提示
+        friendly_error = _translate_openstack_error(error_msg)
+        
         # 记录失败日志
         try:
             OperationLog.log_operation(
@@ -1194,7 +1325,68 @@ def create_instance():
         except:
             pass
         
-        return jsonify({'success': False, 'error': error_msg}), 500
+        return jsonify({
+            'success': False, 
+            'error': friendly_error,
+            'technical_error': error_msg  # 保留技术错误信息供调试
+        }), 500
+
+
+def _translate_openstack_error(error_msg):
+    """将OpenStack错误转换为用户友好的提示"""
+    error_lower = error_msg.lower()
+    
+    # NoValidHost错误
+    if 'novalidhost' in error_lower or '找不到有效主机' in error_msg:
+        return (
+            "无法找到合适的计算节点创建实例。可能的原因：\n"
+            "1. 所有计算节点资源不足（CPU、内存、磁盘）\n"
+            "2. 没有满足调度条件的计算节点\n"
+            "3. 计算节点服务未运行\n"
+            "请联系管理员检查计算节点状态和资源配额。"
+        )
+    
+    # 配额超限
+    if 'quota' in error_lower or 'exceeded' in error_lower:
+        return (
+            "配额不足，无法创建实例。\n"
+            "请检查您的资源配额（CPU、内存、实例数量等）是否充足。"
+        )
+    
+    # 网络错误
+    if 'network' in error_lower and ('not found' in error_lower or '404' in error_msg):
+        return "指定的网络不存在，请重新选择网络。"
+    
+    # 镜像错误
+    if 'image' in error_lower and ('not found' in error_lower or '404' in error_msg):
+        return "指定的镜像不存在或已被删除，请重新选择镜像。"
+    
+    # 规格错误
+    if 'flavor' in error_lower and ('not found' in error_lower or '404' in error_msg):
+        return "指定的规格不存在，请重新选择规格。"
+    
+    # 权限错误
+    if 'forbidden' in error_lower or '403' in error_msg:
+        return "权限不足，您没有创建实例的权限。"
+    
+    # 认证错误
+    if 'unauthorized' in error_lower or '401' in error_msg:
+        return "认证失败，请重新登录。"
+    
+    # 服务不可用
+    if 'service unavailable' in error_lower or '503' in error_msg:
+        return "OpenStack服务暂时不可用，请稍后重试。"
+    
+    # 超时错误
+    if 'timeout' in error_lower:
+        return "请求超时，OpenStack服务响应缓慢，请稍后重试。"
+    
+    # 连接错误
+    if 'connection' in error_lower:
+        return "无法连接到OpenStack服务，请检查网络连接。"
+    
+    # 默认返回原始错误
+    return f"创建实例失败: {error_msg}"
 
 @api.route('/instances/all-clusters', methods=['GET'])
 @login_required
@@ -1257,6 +1449,49 @@ def list_all_cluster_instances():
                 except Exception:
                     pass
             
+            
+            # 获取完整的flavor信息
+            try:
+                clients = openstack_service.get_cluster_clients(cluster.id)
+                nova_client = clients['nova']
+                flavor_obj = nova_client.flavors.get(server.flavor['id'])
+                flavor_data = {
+                    'id': flavor_obj.id,
+                    'name': flavor_obj.name,
+                    'vcpus': flavor_obj.vcpus,
+                    'ram': flavor_obj.ram,
+                    'disk': flavor_obj.disk
+                }
+            except Exception as e:
+                logger.warning(f"Failed to get flavor details for {server.flavor['id']}: {e}")
+                flavor_data = {
+                    'id': server.flavor['id'],
+                    'name': 'Unknown',
+                    'vcpus': 0,
+                    'ram': 0,
+                    'disk': 0
+                }
+            
+            # 获取完整的image信息
+            try:
+                if server.image:
+                    glance_client = clients['glance']
+                    image_obj = glance_client.images.get(server.image['id'])
+                    image_data = {
+                        'id': image_obj.id,
+                        'name': image_obj.name
+                    }
+                else:
+                    image_data = {
+                        'id': None,
+                        'name': '从卷启动'
+                    }
+            except Exception as e:
+                logger.warning(f"Failed to get image details: {e}")
+                image_data = {
+                    'id': server.image['id'] if server.image else None,
+                    'name': 'Unknown' if server.image else '从卷启动'
+                }
             instance_data = {
                 'id': server.id,
                 'name': server.name,
@@ -1268,14 +1503,8 @@ def list_all_cluster_instances():
                 'updated': server.updated,
                 'cluster_id': cluster.id,
                 'cluster_name': cluster.name,
-                'flavor': {
-                    'id': server.flavor['id'],
-                    'name': getattr(server.flavor, 'name', 'Unknown')
-                },
-                'image': {
-                    'id': server.image['id'] if server.image else None,
-                    'name': getattr(server.image, 'name', 'Unknown') if server.image else 'Boot from volume'
-                },
+                'flavor': flavor_data,
+                'image': image_data,
                 'key_name': getattr(server, 'key_name', None),
                 'availability_zone': getattr(server, 'OS-EXT-AZ:availability_zone', None),
                 'host': getattr(server, 'OS-EXT-SRV-ATTR:host', None),
@@ -1356,7 +1585,7 @@ def list_all_cluster_instances():
 def get_instances_statistics():
     """获取实例统计信息"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         
         if cluster_id:
             # 单个集群统计
@@ -1411,4 +1640,133 @@ def get_instances_statistics():
         
     except Exception as e:
         logger.error(f"Failed to get instances statistics: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ==================== 实例创建向导相关API ====================
+
+@api.route('/flavors', methods=['GET'])
+@login_required
+def list_flavors():
+    """获取规格列表（用于实例创建向导）"""
+    try:
+        cluster_id = get_cluster_id_from_request()
+        if not cluster_id:
+            return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
+        
+        cluster = OpenstackCluster.query.get_or_404(cluster_id)
+        clients = openstack_service.get_cluster_clients(cluster_id)
+        nova_client = clients['nova']
+        
+        # 获取规格列表
+        flavors = nova_client.flavors.list(detailed=True)
+        
+        # 转换为字典格式
+        flavors_data = []
+        for flavor in flavors:
+            flavors_data.append({
+                'id': flavor.id,
+                'name': flavor.name,
+                'vcpus': flavor.vcpus,
+                'ram': flavor.ram,
+                'disk': flavor.disk,
+                'swap': getattr(flavor, 'swap', 0),
+                'ephemeral': getattr(flavor, 'OS-FLV-EXT-DATA:ephemeral', 0),
+                'is_public': getattr(flavor, 'os-flavor-access:is_public', True)
+            })
+        
+        # 按vCPU和内存排序
+        flavors_data.sort(key=lambda x: (x['vcpus'], x['ram']))
+        
+        return jsonify({
+            'success': True,
+            'data': flavors_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to list flavors: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/keypairs', methods=['GET'])
+@login_required
+def list_keypairs():
+    """获取密钥对列表（用于实例创建向导）"""
+    try:
+        cluster_id = get_cluster_id_from_request()
+        if not cluster_id:
+            return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
+        
+        cluster = OpenstackCluster.query.get_or_404(cluster_id)
+        clients = openstack_service.get_cluster_clients(cluster_id)
+        nova_client = clients['nova']
+        
+        # 获取密钥对列表
+        keypairs = nova_client.keypairs.list()
+        
+        # 转换为字典格式
+        keypairs_data = []
+        for kp in keypairs:
+            keypairs_data.append({
+                'name': kp.name,
+                'fingerprint': kp.fingerprint,
+                'public_key': getattr(kp, 'public_key', None)
+            })
+        
+        return jsonify({
+            'success': True,
+            'data': keypairs_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to list keypairs: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@api.route('/quota', methods=['GET'])
+@login_required
+def get_quota():
+    """获取配额信息（用于实例创建向导）"""
+    try:
+        cluster_id = get_cluster_id_from_request()
+        if not cluster_id:
+            return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
+        
+        cluster = OpenstackCluster.query.get_or_404(cluster_id)
+        clients = openstack_service.get_cluster_clients(cluster_id)
+        nova_client = clients['nova']
+        
+        # 获取配额信息
+        try:
+            # 获取当前项目的配额
+            limits = nova_client.limits.get()
+            
+            quota_data = {
+                'instances_used': limits.absolute.totalInstancesUsed,
+                'instances_limit': limits.absolute.maxTotalInstances,
+                'cores_used': limits.absolute.totalCoresUsed,
+                'cores_limit': limits.absolute.maxTotalCores,
+                'ram_used': limits.absolute.totalRAMUsed,
+                'ram_limit': limits.absolute.maxTotalRAMSize
+            }
+            
+            return jsonify({
+                'success': True,
+                'data': quota_data
+            })
+        except Exception as e:
+            logger.warning(f"Failed to get quota details: {e}")
+            # 返回默认值
+            return jsonify({
+                'success': True,
+                'data': {
+                    'instances_used': 0,
+                    'instances_limit': 10,
+                    'cores_used': 0,
+                    'cores_limit': 20,
+                    'ram_used': 0,
+                    'ram_limit': 51200
+                }
+            })
+        
+    except Exception as e:
+        logger.error(f"Failed to get quota: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500

@@ -3,7 +3,7 @@
 提供集群的CRUD操作和状态管理
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import request, jsonify, current_app
 from flask_login import login_required, current_user
 from . import api_bp as api
@@ -13,6 +13,10 @@ from app.models.log import OperationLog
 from app.services.openstack_service import openstack_service
 
 logger = logging.getLogger(__name__)
+
+# 集群状态缓存 - 格式: {cluster_id: {'status': {...}, 'timestamp': datetime}}
+_cluster_status_cache = {}
+_CACHE_DURATION = timedelta(seconds=30)  # 30秒缓存
 
 @api.route('/clusters', methods=['GET'])
 @login_required
@@ -405,10 +409,73 @@ def get_cluster_resources(cluster_id):
         logger.error(f"Failed to get cluster resources {cluster_id}: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+def _get_cluster_status_cached(cluster):
+    """
+    获取集群状态（带缓存）
+    
+    Args:
+        cluster: OpenstackCluster对象
+        
+    Returns:
+        dict: 集群状态信息
+    """
+    global _cluster_status_cache
+    
+    now = datetime.utcnow()
+    cache_key = cluster.id
+    
+    # 检查缓存是否有效
+    if cache_key in _cluster_status_cache:
+        cached_data = _cluster_status_cache[cache_key]
+        if now - cached_data['timestamp'] < _CACHE_DURATION:
+            logger.debug(f"Using cached status for cluster {cluster.name}")
+            return cached_data['status']
+    
+    # 缓存失效或不存在，重新获取状态
+    logger.debug(f"Fetching fresh status for cluster {cluster.name}")
+    
+    try:
+        # 尝试连接集群获取实时状态
+        result = cluster.test_connection()
+        
+        if result['success']:
+            status = 'connected'
+            error_message = None
+        else:
+            status = 'failed'
+            error_message = result.get('error', 'Connection failed')
+    except Exception as e:
+        logger.warning(f"Failed to test connection for cluster {cluster.name}: {e}")
+        status = cluster.connection_status or 'unknown'
+        error_message = str(e)
+    
+    # 构建状态数据
+    cluster_status = {
+        'id': cluster.id,
+        'name': cluster.name,
+        'status': status,
+        'last_test': now.isoformat(),
+        'error': error_message,
+        'resources': {
+            'instances': cluster.instance_count or 0,
+            'volumes': cluster.volume_count or 0,
+            'networks': cluster.network_count or 0
+        }
+    }
+    
+    # 更新缓存
+    _cluster_status_cache[cache_key] = {
+        'status': cluster_status,
+        'timestamp': now
+    }
+    
+    return cluster_status
+
+
 @api.route('/clusters/status', methods=['GET'])
 @login_required
 def get_clusters_status():
-    """获取所有集群状态概览"""
+    """获取所有集群状态概览（带30秒缓存）"""
     try:
         clusters = OpenstackCluster.get_active_clusters()
         
@@ -417,29 +484,18 @@ def get_clusters_status():
             'connected': 0,
             'failed': 0,
             'unknown': 0,
-            'clusters': []
+            'clusters': [],
+            'cached_at': datetime.utcnow().isoformat()
         }
         
         for cluster in clusters:
-            cluster_data = {
-                'id': cluster.id,
-                'name': cluster.name,
-                'status': cluster.connection_status,
-                'last_test': cluster.last_connection_test.isoformat() if cluster.last_connection_test else None,
-                'error': cluster.error_message,
-                'resources': {
-                    'instances': cluster.instance_count,
-                    'volumes': cluster.volume_count,
-                    'networks': cluster.network_count
-                }
-            }
-            
-            status_summary['clusters'].append(cluster_data)
+            cluster_status = _get_cluster_status_cached(cluster)
+            status_summary['clusters'].append(cluster_status)
             
             # 统计状态
-            if cluster.connection_status == 'connected':
+            if cluster_status['status'] == 'connected':
                 status_summary['connected'] += 1
-            elif cluster.connection_status == 'failed':
+            elif cluster_status['status'] == 'failed':
                 status_summary['failed'] += 1
             else:
                 status_summary['unknown'] += 1
@@ -451,4 +507,446 @@ def get_clusters_status():
         
     except Exception as e:
         logger.error(f"Failed to get clusters status: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api.route('/clusters/<int:cluster_id>/status', methods=['GET'])
+@login_required
+def get_single_cluster_status(cluster_id):
+    """获取单个集群状态（带30秒缓存）"""
+    try:
+        cluster = OpenstackCluster.query.get_or_404(cluster_id)
+        
+        # 检查是否强制刷新
+        force_refresh = request.args.get('refresh', 'false').lower() == 'true'
+        
+        if force_refresh:
+            # 清除该集群的缓存
+            global _cluster_status_cache
+            if cluster_id in _cluster_status_cache:
+                del _cluster_status_cache[cluster_id]
+                logger.info(f"Cleared cache for cluster {cluster.name}")
+        
+        cluster_status = _get_cluster_status_cached(cluster)
+        
+        return jsonify({
+            'success': True,
+            'data': cluster_status
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get cluster {cluster_id} status: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api.route('/clusters/<int:cluster_id>/projects', methods=['GET'])
+@login_required
+def get_cluster_projects(cluster_id):
+    """获取集群的项目列表（OpenStack）"""
+    try:
+        cluster = OpenstackCluster.query.get_or_404(cluster_id)
+        
+        # 获取OpenStack客户端
+        clients = openstack_service.get_cluster_clients(cluster_id)
+        
+        # 检查是否有keystone客户端（用于获取项目列表）
+        if 'keystone' not in clients:
+            logger.warning(f"Keystone client not available for cluster {cluster.name}")
+            return jsonify({
+                'success': False,
+                'error': 'Keystone服务不可用，无法获取项目列表'
+            }), 400
+        
+        keystone_client = clients['keystone']
+        
+        # 获取项目列表
+        projects = keystone_client.projects.list()
+        
+        # 转换为字典格式
+        projects_data = []
+        for project in projects:
+            project_info = {
+                'id': project.id,
+                'name': project.name,
+                'description': getattr(project, 'description', ''),
+                'enabled': getattr(project, 'enabled', True),
+                'domain_id': getattr(project, 'domain_id', None),
+                'is_domain': getattr(project, 'is_domain', False)
+            }
+            projects_data.append(project_info)
+        
+        # 按名称排序
+        projects_data.sort(key=lambda x: x['name'])
+        
+        # 记录操作日志
+        OperationLog.log_operation(
+            user_id=current_user.id,
+            cluster_id=cluster_id,
+            operation_type='cluster_list_projects',
+            operation_object=f'cluster:{cluster.name}',
+            result='success',
+            details=f'获取项目列表: {len(projects_data)} 个项目'
+        )
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'cluster_id': cluster_id,
+                'cluster_name': cluster.name,
+                'projects': projects_data,
+                'total': len(projects_data)
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get projects for cluster {cluster_id}: {str(e)}")
+        
+        # 如果是认证错误或服务不可用，返回友好的错误信息
+        error_msg = str(e)
+        if 'Unauthorized' in error_msg or 'Authentication' in error_msg:
+            error_msg = '集群认证失败，请检查集群凭据'
+        elif 'Connection' in error_msg or 'Timeout' in error_msg:
+            error_msg = '无法连接到集群，请检查集群状态'
+        
+        return jsonify({
+            'success': False,
+            'error': error_msg
+        }), 500
+
+
+@api.route('/clusters/<int:cluster_id>/projects/<project_id>/switch', methods=['POST'])
+@login_required
+def switch_cluster_project(cluster_id, project_id):
+    """切换集群的当前项目（保存到session）"""
+    try:
+        cluster = OpenstackCluster.query.get_or_404(cluster_id)
+        
+        # 验证项目是否存在
+        clients = openstack_service.get_cluster_clients(cluster_id)
+        
+        if 'keystone' not in clients:
+            return jsonify({
+                'success': False,
+                'error': 'Keystone服务不可用'
+            }), 400
+        
+        keystone_client = clients['keystone']
+        
+        try:
+            project = keystone_client.projects.get(project_id)
+        except Exception as e:
+            logger.warning(f"Project {project_id} not found in cluster {cluster.name}: {e}")
+            return jsonify({
+                'success': False,
+                'error': '项目不存在'
+            }), 404
+        
+        # 更新session中的集群上下文
+        from flask import session
+        cluster_context = session.get('cluster_context', {})
+        
+        # 确保当前选择的集群是这个集群
+        if cluster_context.get('selectedClusterId') != cluster_id:
+            cluster_context['selectedClusterId'] = cluster_id
+        
+        # 更新选择的项目
+        cluster_context['selectedProjectId'] = project_id
+        cluster_context['selectedProjectName'] = project.name
+        cluster_context['lastUpdated'] = datetime.utcnow().isoformat()
+        
+        session['cluster_context'] = cluster_context
+        session.modified = True
+        
+        # 记录操作日志
+        OperationLog.log_operation(
+            user_id=current_user.id,
+            cluster_id=cluster_id,
+            operation_type='cluster_switch_project',
+            operation_object=f'cluster:{cluster.name}',
+            result='success',
+            details=f'切换到项目: {project.name}'
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': f'已切换到项目: {project.name}',
+            'data': {
+                'cluster_id': cluster_id,
+                'cluster_name': cluster.name,
+                'project_id': project_id,
+                'project_name': project.name
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to switch project for cluster {cluster_id}: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@api.route('/clusters/<int:cluster_id>/enhanced', methods=['GET'])
+@login_required
+def get_cluster_enhanced(cluster_id):
+    """获取集群增强信息（版本、响应时间、配额、服务健康等）"""
+    try:
+        cluster = OpenstackCluster.query.get_or_404(cluster_id)
+        
+        # 基础信息
+        enhanced_data = {
+            'id': cluster.id,
+            'name': cluster.name,
+            'description': cluster.description,
+            'auth_url': cluster.auth_url,
+            'region_name': cluster.region_name,
+            'connection_status': cluster.connection_status,
+            'last_connection_test': cluster.last_connection_test.isoformat() if cluster.last_connection_test else None,
+        }
+        
+        # 尝试获取增强信息
+        try:
+            clients = openstack_service.get_cluster_clients(cluster_id)
+            keystone_client = clients['keystone']
+            
+            # 获取OpenStack版本
+            try:
+                version_info = keystone_client.version
+                if hasattr(version_info, 'version'):
+                    enhanced_data['version'] = version_info.version
+                else:
+                    # 尝试从API版本推断
+                    enhanced_data['version'] = 'Unknown'
+            except Exception as e:
+                logger.warning(f"Failed to get version for cluster {cluster_id}: {e}")
+                enhanced_data['version'] = 'Unknown'
+            
+            # 测量响应时间
+            import time
+            start_time = time.time()
+            try:
+                keystone_client.projects.list(limit=1)
+                response_time_ms = int((time.time() - start_time) * 1000)
+                enhanced_data['response_time_ms'] = response_time_ms
+            except Exception as e:
+                logger.warning(f"Failed to measure response time for cluster {cluster_id}: {e}")
+                enhanced_data['response_time_ms'] = None
+            
+            # 获取当前项目信息
+            from flask import session
+            cluster_context = session.get('cluster_context', {})
+            if cluster_context.get('selectedClusterId') == cluster_id:
+                enhanced_data['current_project'] = {
+                    'id': cluster_context.get('selectedProjectId'),
+                    'name': cluster_context.get('selectedProjectName')
+                }
+            else:
+                enhanced_data['current_project'] = None
+            
+            # 获取项目数量
+            try:
+                projects = keystone_client.projects.list()
+                enhanced_data['project_count'] = len(projects)
+            except Exception as e:
+                logger.warning(f"Failed to get project count for cluster {cluster_id}: {e}")
+                enhanced_data['project_count'] = 0
+            
+            # 获取配额/资源信息
+            try:
+                nova_client = clients['nova']
+                cinder_client = clients['cinder']
+                
+                # 获取当前项目ID（如果有）
+                project_id = cluster_context.get('selectedProjectId') if cluster_context.get('selectedClusterId') == cluster_id else None
+                
+                if project_id:
+                    # 如果选择了项目，返回项目配额
+                    try:
+                        # Nova配额
+                        nova_quota = nova_client.quotas.get(project_id)
+                        # Cinder配额
+                        cinder_quota = cinder_client.quotas.get(project_id)
+                        
+                        # 获取实际使用量
+                        instances = nova_client.servers.list()
+                        volumes = cinder_client.volumes.list()
+                        
+                        # 计算存储使用量
+                        volume_storage_used = sum(v.size for v in volumes)
+                        
+                        enhanced_data['quota'] = {
+                            'instances': {
+                                'used': len(instances),
+                                'limit': nova_quota.instances
+                            },
+                            'vcpus': {
+                                'used': sum(getattr(nova_client.flavors.get(i.flavor['id']), 'vcpus', 0) for i in instances),
+                                'limit': nova_quota.cores
+                            },
+                            'ram_mb': {
+                                'used': sum(getattr(nova_client.flavors.get(i.flavor['id']), 'ram', 0) for i in instances),
+                                'limit': nova_quota.ram
+                            },
+                            'volumes': {
+                                'used': len(volumes),
+                                'limit': cinder_quota.volumes
+                            },
+                            'storage_gb': {
+                                'used': volume_storage_used,
+                                'limit': cinder_quota.gigabytes
+                            }
+                        }
+                    except Exception as e:
+                        logger.warning(f"Failed to get project quota: {e}, falling back to cluster stats")
+                        project_id = None  # 回退到集群统计
+                
+                if not project_id:
+                    # 如果没有选择项目，返回集群级别的资源统计
+                    try:
+                        # 获取hypervisor统计信息
+                        stats = nova_client.hypervisor_stats.statistics()
+                        
+                        # 获取所有卷的统计
+                        try:
+                            volumes = cinder_client.volumes.list(search_opts={'all_tenants': True})
+                            volume_storage_used = sum(v.size for v in volumes)
+                            volume_storage_total = volume_storage_used * 2  # 估算总容量
+                        except:
+                            volume_storage_used = 0
+                            volume_storage_total = 0
+                        
+                        enhanced_data['quota'] = {
+                            'vcpus': {
+                                'used': stats.vcpus_used,
+                                'limit': stats.vcpus
+                            },
+                            'ram_mb': {
+                                'used': stats.memory_mb_used,
+                                'limit': stats.memory_mb
+                            },
+                            'storage_gb': {
+                                'used': volume_storage_used,
+                                'limit': max(volume_storage_total, volume_storage_used + 100)  # 确保有可用空间显示
+                            }
+                        }
+                        logger.info(f"Using cluster-level stats for cluster {cluster_id}")
+                    except Exception as e2:
+                        logger.warning(f"Failed to get cluster stats: {e2}")
+                        enhanced_data['quota'] = None
+                    
+            except Exception as e:
+                logger.error(f"Failed to get quota/stats for cluster {cluster_id}: {e}")
+                enhanced_data['quota'] = None
+            
+            # 获取服务健康状态
+            try:
+                service_health = openstack_service.get_service_health(cluster_id)
+                enhanced_data['service_health'] = service_health
+            except Exception as e:
+                logger.warning(f"Failed to get service health for cluster {cluster_id}: {e}")
+                enhanced_data['service_health'] = {
+                    'nova': 'unknown',
+                    'cinder': 'unknown',
+                    'neutron': 'unknown',
+                    'glance': 'unknown'
+                }
+            
+            # 检查告警（配额警告）
+            alerts = []
+            if enhanced_data.get('quota'):
+                for resource, quota_info in enhanced_data['quota'].items():
+                    if quota_info['limit'] > 0:
+                        usage_percent = (quota_info['used'] / quota_info['limit']) * 100
+                        if usage_percent >= 80:
+                            alerts.append({
+                                'type': 'quota_warning',
+                                'severity': 'warning' if usage_percent < 90 else 'critical',
+                                'message': f'{resource} 配额使用率达到 {usage_percent:.1f}%'
+                            })
+            
+            enhanced_data['alerts'] = alerts
+            
+        except Exception as e:
+            logger.error(f"Failed to get enhanced info for cluster {cluster_id}: {e}")
+            # 返回基础信息
+            enhanced_data['version'] = 'Unknown'
+            enhanced_data['response_time_ms'] = None
+            enhanced_data['current_project'] = None
+            enhanced_data['project_count'] = 0
+            enhanced_data['quota'] = None
+            enhanced_data['service_health'] = {
+                'nova': 'unknown',
+                'cinder': 'unknown',
+                'neutron': 'unknown',
+                'glance': 'unknown'
+            }
+            enhanced_data['alerts'] = []
+            enhanced_data['error'] = str(e)
+        
+        return jsonify({
+            'success': True,
+            'data': enhanced_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get enhanced cluster info {cluster_id}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api.route('/clusters/<int:cluster_id>/services', methods=['GET'])
+@login_required
+def get_cluster_services(cluster_id):
+    """获取集群服务健康状态详情"""
+    try:
+        cluster = OpenstackCluster.query.get_or_404(cluster_id)
+        
+        service_health = openstack_service.get_service_health(cluster_id)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'cluster_id': cluster_id,
+                'cluster_name': cluster.name,
+                'services': service_health
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get services for cluster {cluster_id}: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@api.route('/clusters/<int:cluster_id>/hosts', methods=['GET'])
+@login_required
+def get_cluster_hosts(cluster_id):
+    """获取集群的计算节点（主机）列表"""
+    try:
+        cluster = OpenstackCluster.query.get_or_404(cluster_id)
+        
+        logger.info(f"Getting hosts for cluster {cluster_id} ({cluster.name})")
+        
+        # 获取主机列表
+        hosts_data = openstack_service.get_cluster_hosts(cluster_id)
+        
+        logger.info(f"Retrieved {len(hosts_data)} hosts for cluster {cluster_id}")
+        
+        # 记录操作日志
+        OperationLog.log_operation(
+            user_id=current_user.id,
+            cluster_id=cluster_id,
+            operation_type='cluster_list_hosts',
+            operation_object=f'cluster:{cluster.name}',
+            result='success',
+            details=f'获取主机列表: {len(hosts_data)} 个主机'
+        )
+        
+        return jsonify({
+            'success': True,
+            'data': hosts_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to get hosts for cluster {cluster_id}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500

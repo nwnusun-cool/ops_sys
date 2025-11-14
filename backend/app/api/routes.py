@@ -16,6 +16,7 @@ from . import security_group_routes
 from . import snapshot_routes
 from . import user_routes
 from . import image_routes
+from . import role_routes
 
 @api_bp.route('/health')
 def health_check():

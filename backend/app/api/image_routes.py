@@ -8,6 +8,7 @@ import os
 import tempfile
 from app.services.openstack_service import get_openstack_service
 from . import api_bp
+from .helpers import get_cluster_id_from_request
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ logger = logging.getLogger(__name__)
 @login_required
 def list_images():
     """获取镜像列表"""
-    cluster_id = request.args.get('cluster_id', type=int)
+    cluster_id = get_cluster_id_from_request()
     if not cluster_id:
         return jsonify({'success': False, 'error': '集群ID是必需的'}), 400
     
@@ -57,7 +58,7 @@ def list_images():
 @login_required
 def get_image_detail(image_id):
     """获取镜像详细信息"""
-    cluster_id = request.args.get('cluster_id', type=int)
+    cluster_id = get_cluster_id_from_request()
     if not cluster_id:
         return jsonify({'success': False, 'error': '集群ID是必需的'}), 400
     
@@ -202,7 +203,7 @@ def delete_image(image_id):
 @login_required
 def download_image(image_id):
     """下载镜像文件"""
-    cluster_id = request.args.get('cluster_id', type=int)
+    cluster_id = get_cluster_id_from_request()
     if not cluster_id:
         return jsonify({'success': False, 'error': '集群ID是必需的'}), 400
     
@@ -265,7 +266,7 @@ def get_image_formats():
 @login_required
 def get_image_statistics():
     """获取镜像统计信息"""
-    cluster_id = request.args.get('cluster_id', type=int)
+    cluster_id = get_cluster_id_from_request()
     if not cluster_id:
         return jsonify({'success': False, 'error': '集群ID是必需的'}), 400
     

@@ -7,6 +7,7 @@ from datetime import datetime
 from flask import request, jsonify
 from flask_login import login_required, current_user
 from . import api_bp as api
+from .helpers import get_cluster_id_from_request
 from app.models.base import db
 from app.models.cluster import OpenstackCluster
 from app.models.log import OperationLog
@@ -19,8 +20,8 @@ logger = logging.getLogger(__name__)
 def list_snapshots():
     """获取快照列表"""
     try:
-        # 获取查询参数
-        cluster_id = request.args.get('cluster_id', type=int)
+        # 获取查询参数 - 优先从session读取cluster_id
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -244,7 +245,7 @@ def list_all_cluster_snapshots():
 def get_snapshot_detail(snapshot_id):
     """获取快照详细信息"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         snapshot_type = request.args.get('type', 'volume')  # volume, instance
         
         if not cluster_id:
@@ -270,7 +271,7 @@ def get_snapshot_detail(snapshot_id):
 def snapshot_action(snapshot_id):
     """执行快照操作"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -415,7 +416,7 @@ def snapshot_action(snapshot_id):
 def create_snapshot():
     """创建快照"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -537,7 +538,7 @@ def create_snapshot():
 def get_snapshot_statistics():
     """获取快照统计信息"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         

@@ -2,80 +2,306 @@
 
 {% block title %}快照管理 - {{ super() }}{% endblock %}
 
-{% block extra_css %}
+{% block extra_head %}
 <style>
-    .snapshot-card {
-        transition: transform 0.2s;
-        border-left: 4px solid #dee2e6;
+    /* 现代化表格样式 - 与实例管理保持一致 */
+    .snapshots-table-container {
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        overflow: hidden;
     }
-    .snapshot-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    
+    .snapshots-table {
+        margin-bottom: 0;
     }
-    .snapshot-card.status-available {
-        border-left-color: #28a745;
+    
+    .snapshots-table thead {
+        background: #fafafa;
+        border-bottom: 1px solid #e8e8e8;
     }
-    .snapshot-card.status-active {
-        border-left-color: #28a745;
+    
+    .snapshots-table thead th {
+        font-weight: 600;
+        color: #262626;
+        font-size: 14px;
+        padding: 16px 12px;
+        border: none;
+        white-space: nowrap;
     }
-    .snapshot-card.status-creating {
-        border-left-color: #ffc107;
+    
+    .snapshots-table tbody tr {
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s;
     }
-    .snapshot-card.status-error {
-        border-left-color: #dc3545;
+    
+    .snapshots-table tbody tr:hover {
+        background-color: #fafafa;
     }
-    .snapshot-card.type-volume {
-        border-left-color: #007bff;
+    
+    .snapshots-table tbody td {
+        padding: 16px 12px;
+        vertical-align: middle;
+        font-size: 14px;
+        color: #595959;
     }
-    .snapshot-card.type-instance {
-        border-left-color: #17a2b8;
+    
+    /* 快照名称样式 */
+    .snapshot-name {
+        font-weight: 500;
+        color: #1890ff;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
+    
+    .snapshot-name:hover {
+        color: #40a9ff;
+        text-decoration: underline;
+    }
+    
+    .snapshot-id {
+        font-size: 12px;
+        color: #8c8c8c;
+        font-family: 'Courier New', monospace;
+        margin-top: 2px;
+    }
+    
+    /* 状态标签 */
     .status-badge {
-        font-size: 0.8rem;
-        padding: 0.25em 0.5em;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 4px;
+        font-size: 13px;
+        font-weight: 500;
+        white-space: nowrap;
     }
-    .snapshot-actions {
-        opacity: 0;
-        transition: opacity 0.3s;
+    
+    .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        display: inline-block;
     }
-    .snapshot-card:hover .snapshot-actions {
-        opacity: 1;
+    
+    .status-badge.status-available,
+    .status-badge.status-active {
+        background: #f6ffed;
+        color: #52c41a;
+        border: 1px solid #b7eb8f;
     }
+    
+    .status-badge.status-available .status-dot,
+    .status-badge.status-active .status-dot {
+        background: #52c41a;
+        box-shadow: 0 0 0 2px #f6ffed;
+    }
+    
+    .status-badge.status-creating,
+    .status-badge.status-saving {
+        background: #e6f7ff;
+        color: #1890ff;
+        border: 1px solid #91d5ff;
+    }
+    
+    .status-badge.status-creating .status-dot,
+    .status-badge.status-saving .status-dot {
+        background: #1890ff;
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    .status-badge.status-error {
+        background: #fff2e8;
+        color: #fa541c;
+        border: 1px solid #ffbb96;
+    }
+    
+    .status-badge.status-deleting,
+    .status-badge.status-deleted {
+        background: #f5f5f5;
+        color: #8c8c8c;
+        border: 1px solid #d9d9d9;
+    }
+    
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    
+    /* 操作按钮 */
+    .action-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .action-btn {
+        padding: 4px 12px;
+        font-size: 13px;
+        border-radius: 4px;
+        border: 1px solid #d9d9d9;
+        background: #fff;
+        color: #595959;
+        cursor: pointer;
+        transition: all 0.2s;
+        white-space: nowrap;
+    }
+    
+    .action-btn:hover {
+        color: #1890ff;
+        border-color: #1890ff;
+    }
+    
+    .action-btn.btn-success:hover {
+        color: #52c41a;
+        border-color: #52c41a;
+    }
+    
+    .action-btn.btn-danger:hover {
+        color: #ff4d4f;
+        border-color: #ff4d4f;
+    }
+    
+    /* 空状态 */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #8c8c8c;
+    }
+    
+    .empty-state i {
+        font-size: 64px;
+        color: #d9d9d9;
+        margin-bottom: 16px;
+    }
+    
+    .empty-state h5 {
+        color: #595959;
+        margin-bottom: 8px;
+    }
+    
+    /* 统计卡片优化 - 紧凑设计 */
     .stats-overview {
-        margin-bottom: 2rem;
+        margin-bottom: 1rem;
     }
+    
+    .stats-overview .card {
+        border: none;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .stats-overview .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+    }
+    
+    .stats-overview .card-body {
+        padding: 0.75rem 1rem;
+    }
+    
+    /* 紧凑的统计卡片布局 */
+    .stats-compact {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .stats-compact .stat-icon {
+        font-size: 1.5rem;
+        opacity: 0.9;
+    }
+    
+    .stats-compact .stat-content {
+        flex: 1;
+    }
+    
+    .stats-compact .stat-value {
+        font-size: 1.5rem;
+        font-weight: 600;
+        line-height: 1;
+        margin-bottom: 0.125rem;
+    }
+    
+    .stats-compact .stat-label {
+        font-size: 0.75rem;
+        opacity: 0.9;
+        line-height: 1;
+    }
+    
+    /* 过滤器样式优化 */
+    .filter-section {
+        background: #fff;
+        padding: 0.75rem 1rem;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        margin-bottom: 1rem;
+    }
+    
+    .form-label-sm {
+        font-size: 0.75rem;
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+        color: #595959;
+    }
+    
     .loading-spinner {
         display: none;
     }
-    .filter-section {
-        background: #f8f9fa;
-        border-radius: 0.5rem;
-        padding: 1rem;
-        margin-bottom: 1.5rem;
+    
+    /* 响应式优化 */
+    @media (max-width: 1200px) {
+        .snapshots-table {
+            font-size: 13px;
+        }
+        
+        .snapshots-table thead th,
+        .snapshots-table tbody td {
+            padding: 12px 8px;
+        }
+        
+        .stats-compact .stat-icon {
+            font-size: 1.25rem;
+        }
+        
+        .stats-compact .stat-value {
+            font-size: 1.25rem;
+        }
     }
-    .size-info {
-        font-size: 0.85rem;
-        color: #6c757d;
+    
+    @media (max-width: 768px) {
+        .stats-compact {
+            flex-direction: column;
+            text-align: center;
+            gap: 0.25rem;
+        }
+        
+        .stats-compact .stat-icon {
+            font-size: 1.5rem;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-    <h1 class="h2">
+<!-- 上下文信息栏和面包屑 -->
+{% include 'components/context-bar.html' %}
+
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-2 pb-2 mb-2 border-bottom">
+    <h1 class="h4 mb-0">
         <i class="fas fa-camera me-2"></i>快照管理
     </h1>
-    <div class="btn-toolbar mb-2 mb-md-0">
-        <div class="btn-group me-2">
-            <button type="button" class="btn btn-success" onclick="showCreateSnapshotModal()">
-                <i class="fas fa-plus me-1"></i>创建快照
-            </button>
-        </div>
-        <div class="btn-group me-2">
-            <button type="button" class="btn btn-outline-secondary" onclick="refreshSnapshots()">
-                <i class="fas fa-sync-alt me-1"></i>刷新
-            </button>
-        </div>
+    <div class="btn-toolbar">
+        <button type="button" class="btn btn-sm btn-primary me-2" onclick="showCreateSnapshotModal()">
+            <i class="fas fa-plus me-1"></i>创建快照
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshSnapshots()">
+            <i class="fas fa-sync-alt me-1"></i>刷新
+        </button>
     </div>
 </div>
 
@@ -87,66 +313,123 @@
     <p class="mt-2 text-muted">正在加载快照信息...</p>
 </div>
 
-<!-- 集群选择和统计概览 -->
+<!-- 集群选择器 -->
+{% include 'components/cluster-selector-inline.html' %}
+
+<!-- 统计概览 - 紧凑设计 -->
 <div class="stats-overview">
-    <div class="row">
-        <div class="col-md-3">
-            <div class="card">
+    <div class="row g-2 mb-2">
+        <div class="col-6 col-md-4">
+            <div class="card bg-info text-white stat-card-clickable" data-filter-type="" onclick="filterByType('')" role="button" tabindex="0">
                 <div class="card-body">
-                    <label class="form-label">选择集群</label>
-                    <select class="form-select" id="clusterSelect" onchange="onClusterChange()">
-                        <option value="">加载中...</option>
-                    </select>
+                    <div class="stats-compact">
+                        <i class="fas fa-camera stat-icon"></i>
+                        <div class="stat-content">
+                            <div class="stat-value" id="totalSnapshots">-</div>
+                            <div class="stat-label">总快照数</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-info text-white">
-                <div class="card-body text-center">
-                    <h5 class="card-title">总快照数</h5>
-                    <h2 class="mb-0" id="totalSnapshots">-</h2>
+        <div class="col-6 col-md-4">
+            <div class="card bg-primary text-white stat-card-clickable" data-filter-type="volume" onclick="filterByType('volume')" role="button" tabindex="0">
+                <div class="card-body">
+                    <div class="stats-compact">
+                        <i class="fas fa-hdd stat-icon"></i>
+                        <div class="stat-content">
+                            <div class="stat-value" id="volumeSnapshots">-</div>
+                            <div class="stat-label">卷快照</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-primary text-white">
-                <div class="card-body text-center">
-                    <h5 class="card-title">卷快照</h5>
-                    <h2 class="mb-0" id="volumeSnapshots">-</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-info text-white">
-                <div class="card-body text-center">
-                    <h5 class="card-title">实例快照</h5>
-                    <h2 class="mb-0" id="instanceSnapshots">-</h2>
+        <div class="col-6 col-md-4">
+            <div class="card bg-success text-white stat-card-clickable" data-filter-type="instance" onclick="filterByType('instance')" role="button" tabindex="0">
+                <div class="card-body">
+                    <div class="stats-compact">
+                        <i class="fas fa-server stat-icon"></i>
+                        <div class="stat-content">
+                            <div class="stat-value" id="instanceSnapshots">-</div>
+                            <div class="stat-label">实例快照</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- 快照列表 -->
-<div class="card" id="snapshotsCard" style="display: none;">
-    <div class="card-header">
-        <h5 class="mb-0">
-            <i class="fas fa-list me-2"></i>快照列表
-            <span class="badge bg-secondary ms-2" id="snapshotCount">0</span>
-        </h5>
-    </div>
-    <div class="card-body">
-        <div id="snapshotsContainer" class="row">
-            <!-- 快照卡片将通过JavaScript动态加载 -->
+<!-- 过滤器 - 紧凑设计 -->
+<div class="filter-section" id="filterSection" style="display: none;">
+    <div class="row g-2">
+        <div class="col-md-3">
+            <label class="form-label form-label-sm">快照类型</label>
+            <select class="form-select form-select-sm" id="typeFilter" onchange="applyFilters()">
+                <option value="">全部类型</option>
+                <option value="volume">卷快照</option>
+                <option value="instance">实例快照</option>
+            </select>
         </div>
-        
-        <div id="emptyState" class="text-center py-5 text-muted" style="display: none;">
-            <i class="fas fa-camera fa-3x mb-3"></i>
-            <h5>没有找到快照</h5>
-            <p>选择一个集群开始管理快照</p>
+        <div class="col-md-3">
+            <label class="form-label form-label-sm">状态</label>
+            <select class="form-select form-select-sm" id="statusFilter" onchange="applyFilters()">
+                <option value="">全部状态</option>
+                <option value="available">可用</option>
+                <option value="creating">创建中</option>
+                <option value="error">错误</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label class="form-label form-label-sm">搜索</label>
+            <input type="text" class="form-control form-control-sm" id="nameSearch" placeholder="快照名称或ID..." onkeyup="debounceSearch()">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label form-label-sm">每页显示</label>
+            <select class="form-select form-select-sm" id="perPageSelect" onchange="applyFilters()">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="50">50</option>
+            </select>
         </div>
     </div>
 </div>
+
+<!-- 快照列表 -->
+<div class="snapshots-table-container" id="snapshotsCard" style="display: none;">
+    <div class="table-responsive">
+        <table class="table snapshots-table">
+            <thead>
+                <tr>
+                    <th style="min-width: 200px;">名称/ID</th>
+                    <th style="min-width: 100px;">类型</th>
+                    <th style="min-width: 100px;">状态</th>
+                    <th style="min-width: 200px;">源对象</th>
+                    <th style="min-width: 100px;">大小</th>
+                    <th style="min-width: 150px;">创建时间</th>
+                    <th style="min-width: 200px;" class="text-center">操作</th>
+                </tr>
+            </thead>
+            <tbody id="snapshotsTableBody">
+                <!-- 表格行将通过JavaScript动态加载 -->
+            </tbody>
+        </table>
+    </div>
+    
+    <!-- 空状态 -->
+    <div id="emptyState" class="empty-state" style="display: none;">
+        <i class="fas fa-camera"></i>
+        <h5>暂无快照</h5>
+        <p>请选择一个集群查看快照列表，或创建新的快照</p>
+    </div>
+</div>
+
+<!-- 分页 -->
+<nav class="mt-4" id="paginationContainer" style="display: none;">
+    <ul class="pagination justify-content-center" id="pagination">
+    </ul>
+</nav>
 
 <!-- 创建快照模态框 -->
 <div class="modal fade" id="createSnapshotModal" tabindex="-1">
@@ -272,10 +555,86 @@
     
     // 页面加载完成后初始化
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('DOM loaded, attempting to load clusters...');
-        loadClusters();
+        console.log('DOM loaded, initializing snapshots page...');
+        
+        // 初始化集群选择器
+        initInlineClusterSelector(onClusterChange, '查看快照列表');
+        
+        initializePage();
         initEventListeners();
     });
+    
+    // 初始化页面
+    async function initializePage() {
+        // 显示相关界面元素
+        const filterSection = document.getElementById('filterSection');
+        const snapshotsCard = document.getElementById('snapshotsCard');
+        
+        if (filterSection) filterSection.style.display = 'block';
+        if (snapshotsCard) snapshotsCard.style.display = 'block';
+    }
+    
+    // 防抖搜索
+    let searchTimeout = null;
+    function debounceSearch() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            applyFilters();
+        }, 500);
+    }
+    
+    // 按类型过滤
+    function filterByType(type) {
+        document.getElementById('typeFilter').value = type;
+        applyFilters();
+    }
+    
+    // 应用过滤器
+    let currentFilters = {};
+    function applyFilters() {
+        currentFilters = {
+            type: document.getElementById('typeFilter').value,
+            status: document.getElementById('statusFilter').value,
+            name: document.getElementById('nameSearch').value
+        };
+        
+        // 过滤掉空值
+        Object.keys(currentFilters).forEach(key => {
+            if (!currentFilters[key]) {
+                delete currentFilters[key];
+            }
+        });
+        
+        currentPage = 1;
+        loadSnapshots();
+    }
+    
+    // 集群选择变化
+    function onClusterChange(clusterId) {
+        console.log('快照管理 - 集群选择变化:', clusterId);
+        currentClusterId = clusterId;
+        currentPage = 1;
+        
+        if (!currentClusterId) {
+            const tbody = document.getElementById('snapshotsTableBody');
+            const emptyState = document.getElementById('emptyState');
+            if (tbody) {
+                tbody.innerHTML = '';
+            }
+            if (emptyState) {
+                emptyState.style.display = 'block';
+                emptyState.innerHTML = `
+                    <i class="fas fa-camera"></i>
+                    <h5>请选择集群</h5>
+                    <p>请先选择一个集群查看快照列表</p>
+                `;
+            }
+            clearStatistics();
+        } else {
+            loadSnapshots();
+            loadSnapshotStatistics();
+        }
+    }
     
     // 初始化事件监听器
     function initEventListeners() {
@@ -301,81 +660,6 @@
         
         // 创建快照表单提交
         document.getElementById('createSnapshotForm').addEventListener('submit', handleCreateSnapshot);
-    }
-
-    // 加载集群列表
-    async function loadClusters() {
-        try {
-            console.log('Loading clusters...');
-            const response = await fetch('/api/clusters');
-            console.log('Response status:', response.status);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            console.log('Response data:', data);
-            
-            if (data.success) {
-                const select = document.getElementById('clusterSelect');
-                console.log('ClusterSelect element:', select);
-                if (!select) {
-                    console.error('clusterSelect element not found!');
-                    return;
-                }
-                select.innerHTML = '<option value="">所有集群</option>';
-                console.log('Setting clusters data, length:', data.data.length);
-                
-                let firstConnectedCluster = null;
-                
-                data.data.forEach(cluster => {
-                    const option = document.createElement('option');
-                    option.value = cluster.id;
-                    option.textContent = `${cluster.name} (${cluster.connection_status})`;
-                    if (cluster.connection_status !== 'connected') {
-                        option.disabled = true;
-                        option.textContent += ' - 连接失败';
-                    } else if (!firstConnectedCluster) {
-                        firstConnectedCluster = cluster;
-                    }
-                    select.appendChild(option);
-                });
-                
-                // 自动选择第一个可用集群
-                if (firstConnectedCluster) {
-                    select.value = firstConnectedCluster.id;
-                    currentClusterId = firstConnectedCluster.id;
-                    onClusterChange();
-                }
-            } else {
-                console.error('API response not successful:', data);
-                showAlert('加载集群失败: ' + (data.error || '未知错误'), 'danger');
-            }
-        } catch (error) {
-            console.error('Error loading clusters:', error);
-            console.error('Full error details:', error);
-            showAlert('加载集群列表失败: ' + error.message, 'danger');
-        }
-    }
-
-    // 集群选择变化
-    function onClusterChange() {
-        const select = document.getElementById('clusterSelect');
-        const selectedValue = select.value;
-        currentClusterId = selectedValue ? parseInt(selectedValue) : null;
-        
-        console.log('Cluster changed to:', currentClusterId);
-        
-        if (currentClusterId) {
-            document.getElementById('snapshotsCard').style.display = 'block';
-            loadSnapshots();
-            loadSnapshotStatistics();
-        } else {
-            clearSnapshotsList();
-            clearStatistics();
-            document.getElementById('snapshotsCard').style.display = 'none';
-        }
     }
 
     // 工具函数
@@ -422,7 +706,8 @@
             const params = new URLSearchParams({
                 cluster_id: currentClusterId,
                 page: page,
-                per_page: 20
+                per_page: document.getElementById('perPageSelect')?.value || 20,
+                ...currentFilters
             });
             
             const response = await fetch(`/api/snapshots?${params}`);
@@ -430,7 +715,9 @@
             
             if (data.success) {
                 renderSnapshotsList(data.data);
-                updateSnapshotCount(data.pagination.total);
+                if (data.pagination) {
+                    renderPagination(data.pagination.page, data.pagination.total_pages, data.pagination.total);
+                }
             } else {
                 showAlert('加载快照列表失败: ' + data.error, 'danger');
                 clearSnapshotsList();
@@ -442,6 +729,66 @@
         } finally {
             showLoading(false);
         }
+    }
+    
+    // 渲染分页
+    function renderPagination(currentPage, totalPages, totalItems) {
+        const container = document.getElementById('paginationContainer');
+        const list = document.getElementById('pagination');
+        
+        if (totalPages <= 1) {
+            container.style.display = 'none';
+            return;
+        }
+        
+        container.style.display = 'block';
+        
+        let html = '';
+        
+        // 上一页
+        if (currentPage > 1) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${currentPage - 1}); return false;">&laquo; 上一页</a></li>`;
+        } else {
+            html += `<li class="page-item disabled"><span class="page-link">&laquo; 上一页</span></li>`;
+        }
+        
+        // 页码
+        const startPage = Math.max(1, currentPage - 2);
+        const endPage = Math.min(totalPages, currentPage + 2);
+        
+        if (startPage > 1) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1); return false;">1</a></li>`;
+            if (startPage > 2) {
+                html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+        }
+        
+        for (let i = startPage; i <= endPage; i++) {
+            const activeClass = i === currentPage ? 'active' : '';
+            html += `<li class="page-item ${activeClass}"><a class="page-link" href="#" onclick="changePage(${i}); return false;">${i}</a></li>`;
+        }
+        
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${totalPages}); return false;">${totalPages}</a></li>`;
+        }
+        
+        // 下一页
+        if (currentPage < totalPages) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${currentPage + 1}); return false;">下一页 &raquo;</a></li>`;
+        } else {
+            html += `<li class="page-item disabled"><span class="page-link">下一页 &raquo;</span></li>`;
+        }
+        
+        list.innerHTML = html;
+    }
+    
+    // 换页
+    function changePage(page) {
+        currentPage = page;
+        loadSnapshots(page);
     }
     
     // 加载快照统计信息
@@ -462,73 +809,92 @@
     
     // 渲染快照列表
     function renderSnapshotsList(snapshots) {
-        const container = document.getElementById('snapshotsContainer');
+        const tbody = document.getElementById('snapshotsTableBody');
         const emptyState = document.getElementById('emptyState');
         
         if (!snapshots || snapshots.length === 0) {
-            container.innerHTML = '';
+            tbody.innerHTML = '';
             emptyState.style.display = 'block';
             return;
         }
         
         emptyState.style.display = 'none';
         
-        container.innerHTML = snapshots.map(snapshot => {
-            const statusClass = getStatusClass(snapshot.status);
-            const typeIcon = snapshot.type === 'volume' ? 'hdd' : 'desktop';
+        tbody.innerHTML = snapshots.map(snapshot => {
+            const statusBadge = getStatusBadge(snapshot.status);
+            const typeIcon = snapshot.type === 'volume' ? 'hdd' : 'server';
+            const typeBadge = snapshot.type === 'volume' 
+                ? '<span class="badge bg-primary">卷快照</span>' 
+                : '<span class="badge bg-info">实例快照</span>';
             const sourceName = snapshot.type === 'volume' ? snapshot.volume_name : snapshot.instance_name;
-            const sourceId = snapshot.type === 'volume' ? snapshot.volume_id : snapshot.instance_id;
             
             return `
-                <div class="col-md-6 col-lg-4 mb-3">
-                    <div class="card snapshot-card status-${snapshot.status} type-${snapshot.type}">
-                        <div class="card-header d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0">
-                                <i class="fas fa-${typeIcon} me-2"></i>
-                                ${snapshot.name}
-                            </h6>
-                            <span class="status-badge badge ${statusClass}">${snapshot.status.toUpperCase()}</span>
-                        </div>
-                        <div class="card-body">
-                            <div class="mb-2">
-                                <small class="text-muted">类型:</small>
-                                <span class="badge ${snapshot.type === 'volume' ? 'bg-primary' : 'bg-info'}">
-                                    ${snapshot.type === 'volume' ? '卷快照' : '实例快照'}
-                                </span>
-                            </div>
-                            <div class="mb-2">
-                                <small class="text-muted">源对象:</small>
-                                <br><small>${sourceName}</small>
-                            </div>
-                            <div class="mb-2">
-                                <small class="text-muted">大小:</small>
-                                <strong>${snapshot.size_readable}</strong>
-                            </div>
-                            <div class="mb-2 size-info">
-                                创建时间: ${snapshot.created_at || 'N/A'}
-                            </div>
-                            ${snapshot.description ? `<div class="mb-2 size-info">${snapshot.description}</div>` : ''}
-                        </div>
-                        <div class="card-footer snapshot-actions">
-                            <div class="btn-group btn-group-sm w-100">
-                                <button class="btn btn-outline-primary" onclick="showSnapshotDetail('${snapshot.id}', '${snapshot.type}')" title="详情">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="btn btn-outline-success" onclick="showRestoreModal('${snapshot.id}', '${snapshot.name}', '${snapshot.type}')" title="恢复">
-                                    <i class="fas fa-undo"></i>
-                                </button>
-                                <button class="btn btn-outline-danger" onclick="deleteSnapshot('${snapshot.id}', '${snapshot.name}', '${snapshot.type}')" title="删除">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                <tr>
+                    <td>
+                        <div class="snapshot-name" onclick="showSnapshotDetail('${snapshot.id}', '${snapshot.type}')">
+                            <i class="fas fa-${typeIcon}"></i>
+                            <div>
+                                <div>${escapeHtml(snapshot.name)}</div>
+                                <div class="snapshot-id">${snapshot.id}</div>
                             </div>
                         </div>
-                    </div>
-                </div>
+                    </td>
+                    <td>${typeBadge}</td>
+                    <td>${statusBadge}</td>
+                    <td>
+                        <div><small class="text-muted">${sourceName || 'N/A'}</small></div>
+                        ${snapshot.description ? `<div class="mt-1"><small class="text-muted">${escapeHtml(snapshot.description)}</small></div>` : ''}
+                    </td>
+                    <td><strong>${snapshot.size_readable}</strong></td>
+                    <td>
+                        <small>${snapshot.created_at || 'N/A'}</small>
+                    </td>
+                    <td class="text-center">
+                        <div class="action-buttons">
+                            <button class="action-btn btn-primary" onclick="showSnapshotDetail('${snapshot.id}', '${snapshot.type}')" title="详情">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="action-btn btn-success" onclick="showRestoreModal('${snapshot.id}', '${escapeHtml(snapshot.name)}', '${snapshot.type}')" title="恢复">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                            <button class="action-btn btn-danger" onclick="deleteSnapshot('${snapshot.id}', '${escapeHtml(snapshot.name)}', '${snapshot.type}')" title="删除">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
             `;
         }).join('');
     }
     
-    // 获取状态样式类
+    // HTML转义函数
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+    
+    // 获取状态徽章
+    function getStatusBadge(status) {
+        const statusLower = status.toLowerCase();
+        const statusMap = {
+            'available': { class: 'status-available', label: '可用', icon: true },
+            'active': { class: 'status-active', label: '激活', icon: true },
+            'creating': { class: 'status-creating', label: '创建中', icon: true },
+            'saving': { class: 'status-saving', label: '保存中', icon: true },
+            'error': { class: 'status-error', label: '错误', icon: false },
+            'deleting': { class: 'status-deleting', label: '删除中', icon: false },
+            'deleted': { class: 'status-deleted', label: '已删除', icon: false }
+        };
+        
+        const statusInfo = statusMap[statusLower] || { class: 'status-deleted', label: status.toUpperCase(), icon: false };
+        const dotHtml = statusInfo.icon ? '<span class="status-dot"></span>' : '';
+        
+        return `<span class="status-badge ${statusInfo.class}">${dotHtml}${statusInfo.label}</span>`;
+    }
+    
+    // 获取状态样式类（用于模态框）
     function getStatusClass(status) {
         const statusMap = {
             'available': 'bg-success',
@@ -549,16 +915,22 @@
         document.getElementById('instanceSnapshots').textContent = stats.instance_snapshot_count;
     }
     
-    // 更新快照数量
-    function updateSnapshotCount(count) {
-        document.getElementById('snapshotCount').textContent = count;
-    }
-    
     // 清空快照列表
     function clearSnapshotsList() {
-        document.getElementById('snapshotsContainer').innerHTML = '';
-        document.getElementById('emptyState').style.display = 'block';
-        updateSnapshotCount(0);
+        const tbody = document.getElementById('snapshotsTableBody');
+        const emptyState = document.getElementById('emptyState');
+        const container = document.getElementById('paginationContainer');
+        
+        if (tbody) tbody.innerHTML = '';
+        if (emptyState) {
+            emptyState.style.display = 'block';
+            emptyState.innerHTML = `
+                <i class="fas fa-camera"></i>
+                <h5>请选择集群</h5>
+                <p>请先选择一个集群查看快照列表</p>
+            `;
+        }
+        if (container) container.style.display = 'none';
     }
     
     // 清空统计
