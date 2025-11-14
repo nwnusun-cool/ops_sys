@@ -7,6 +7,7 @@ from datetime import datetime
 from flask import request, jsonify, send_file
 from flask_login import login_required, current_user
 from . import api_bp as api
+from .helpers import get_cluster_id_from_request
 from app.models.base import db
 from app.models.cluster import OpenstackCluster
 from app.models.log import OperationLog
@@ -19,8 +20,8 @@ logger = logging.getLogger(__name__)
 def list_networks():
     """获取网络列表"""
     try:
-        # 获取查询参数
-        cluster_id = request.args.get('cluster_id', type=int)
+        # 获取查询参数 - 优先从session读取cluster_id
+        cluster_id = get_cluster_id_from_request()
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         network_type = request.args.get('network_type')  # external, internal
@@ -327,7 +328,7 @@ def list_all_cluster_networks():
 def get_network_detail(network_id):
     """获取网络详细信息"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -407,7 +408,7 @@ def get_network_detail(network_id):
 def network_action(network_id):
     """执行网络操作"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -505,7 +506,7 @@ def network_action(network_id):
 def create_network():
     """创建网络"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -630,7 +631,7 @@ def create_network():
 def list_subnets():
     """获取子网列表"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         network_id = request.args.get('network_id')
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
@@ -727,7 +728,7 @@ def list_subnets():
 def subnet_action(subnet_id):
     """执行子网操作"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -805,7 +806,7 @@ def subnet_action(subnet_id):
 def batch_network_action():
     """批量网络操作"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         data = request.get_json()
         
         if not cluster_id:
@@ -901,7 +902,7 @@ def export_networks():
         from io import BytesIO
         from datetime import datetime
         
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         data = request.get_json()
         
         if not cluster_id:

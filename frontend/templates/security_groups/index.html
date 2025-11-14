@@ -93,6 +93,12 @@
 {% endblock %}
 
 {% block content %}
+<!-- 上下文信息栏和面包屑 -->
+{% include 'components/context-bar.html' %}
+
+<!-- 集群选择器 -->
+{% include 'components/cluster-selector-inline.html' %}
+
 <!-- 加载覆盖层 -->
 <div class="loading-overlay" id="loadingOverlay">
     <div class="spinner-border text-primary" role="status">
@@ -123,9 +129,9 @@
     </div>
 </div>
 
-<!-- 统计卡片 -->
+<!-- 统计卡片 (移除了集群选择器) -->
 <div class="row mb-4" id="statsCards">
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="card stats-card">
             <div class="card-body text-center">
                 <h5 class="card-title text-primary">总安全组</h5>
@@ -133,7 +139,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="card stats-card">
             <div class="card-body text-center">
                 <h5 class="card-title text-success">已过滤</h5>
@@ -141,7 +147,7 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-4">
         <div class="card stats-card">
             <div class="card-body text-center">
                 <h5 class="card-title text-warning">总规则</h5>
@@ -149,29 +155,15 @@
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stats-card">
-            <div class="card-body text-center">
-                <h5 class="card-title text-info">当前集群</h5>
-                <h6 class="text-info" id="currentCluster">-</h6>
-            </div>
-        </div>
-    </div>
 </div>
 
-<!-- 过滤和搜索 -->
+<!-- 过滤和搜索 (移除了集群选择器) -->
 <div class="row mb-4">
     <div class="col-md-12">
         <div class="card filter-card">
             <div class="card-body">
                 <form id="filterForm" class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label">集群</label>
-                        <select class="form-select" id="clusterSelect" name="cluster_id" onchange="onClusterChange()">
-                            <option value="">加载中...</option>
-                        </select>
-                    </div>
-                    <div class="col-md-4">
+                    <div class="col-md-5">
                         <label class="form-label">搜索</label>
                         <input type="text" class="form-control" id="searchInput" name="search" placeholder="安全组名称或ID">
                     </div>

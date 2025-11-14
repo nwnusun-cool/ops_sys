@@ -7,7 +7,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app import create_app, db
-from app.models import User, OpenstackCluster, OperationLog
+from app.models import User, OpenstackCluster, K8sCluster, OperationLog
 from app.utils.config_manager import config_manager
 import json
 

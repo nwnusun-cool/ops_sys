@@ -1,0 +1,883 @@
+{% extends "base.html" %}
+
+{% block title %}节点详情{% endblock %}
+
+{% block extra_css %}
+<style>
+.node-detail-container {
+    background: #f8f9fc;
+    min-height: calc(100vh - 100px);
+}
+
+.node-info-card {
+    border: none;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    border-radius: 0.35rem;
+    margin-bottom: 1.5rem;
+}
+
+.health-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 0.5rem;
+}
+
+.health-healthy {
+    background-color: #1cc88a;
+    box-shadow: 0 0 0 3px rgba(28, 200, 138, 0.2);
+}
+
+.health-warning {
+    background-color: #f6c23e;
+    box-shadow: 0 0 0 3px rgba(246, 194, 62, 0.2);
+}
+
+.health-unhealthy {
+    background-color: #e74a3b;
+    box-shadow: 0 0 0 3px rgba(231, 74, 59, 0.2);
+}
+
+.resource-progress {
+    height: 1rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+.resource-progress .progress-bar {
+    border-radius: 0.5rem;
+}
+
+.metric-card {
+    border: 1px solid #e3e6f0;
+    border-radius: 0.35rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    background: white;
+    transition: transform 0.2s;
+}
+
+.metric-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+}
+
+.chart-container {
+    height: 300px;
+    position: relative;
+}
+
+.pod-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.pod-status-running {
+    color: #1cc88a;
+}
+
+.pod-status-pending {
+    color: #f6c23e;
+}
+
+.pod-status-failed {
+    color: #e74a3b;
+}
+
+.condition-item {
+    padding: 0.5rem;
+    border-left: 4px solid #e3e6f0;
+    margin-bottom: 0.5rem;
+    border-radius: 0 0.25rem 0.25rem 0;
+}
+
+.condition-true {
+    border-left-color: #1cc88a;
+    background-color: rgba(28, 200, 138, 0.05);
+}
+
+.condition-false {
+    border-left-color: #e74a3b;
+    background-color: rgba(231, 74, 59, 0.05);
+}
+
+.refresh-button {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 1000;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="node-detail-container">
+    <div class="container-fluid">
+        <!-- 页面标题 -->
+        <div class="d-sm-flex align-items-center justify-content-between mb-4">
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-server mr-2"></i>节点详情
+                <span id="node-name" class="badge badge-info ml-2"></span>
+            </h1>
+            <div>
+                <button type="button" class="btn btn-outline-primary btn-sm mr-2" onclick="refreshNodeDetail()">
+                    <i class="fas fa-sync-alt"></i> 刷新
+                </button>
+                <a href="#" class="btn btn-secondary btn-sm" id="back-to-nodes">
+                    <i class="fas fa-arrow-left"></i> 返回节点列表
+                </a>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- 左侧：节点基本信息 -->
+            <div class="col-lg-4">
+                <!-- 节点基本属性 -->
+                <div class="card node-info-card">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-info-circle mr-2"></i>基本信息
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="node-basic-info">
+                            <!-- 基本信息将在这里动态生成 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 节点健康状态 -->
+                <div class="card node-info-card">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-heartbeat mr-2"></i>健康状态
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="node-health-status">
+                            <!-- 健康状态将在这里动态生成 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 节点操作 -->
+                <div class="card node-info-card">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-tools mr-2"></i>节点操作
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-warning btn-sm mb-2" onclick="executeAction('cordon')">
+                                <i class="fas fa-ban mr-2"></i>封锁节点
+                            </button>
+                            <button class="btn btn-outline-success btn-sm mb-2" onclick="executeAction('uncordon')">
+                                <i class="fas fa-check mr-2"></i>解除封锁
+                            </button>
+                            <button class="btn btn-outline-danger btn-sm" onclick="executeAction('drain')">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>驱逐Pod
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧：资源使用情况和监控 -->
+            <div class="col-lg-8">
+                <!-- 资源配置概览 -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="metric-card">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-microchip mr-2"></i>CPU资源
+                            </h6>
+                            <div id="cpu-metrics">
+                                <!-- CPU指标将在这里动态生成 -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="metric-card">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-memory mr-2"></i>内存资源
+                            </h6>
+                            <div id="memory-metrics">
+                                <!-- 内存指标将在这里动态生成 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pod使用统计 -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="metric-card">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-cubes mr-2"></i>Pod统计
+                            </h6>
+                            <div id="pod-metrics">
+                                <!-- Pod统计将在这里动态生成 -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="metric-card">
+                            <h6 class="text-primary mb-3">
+                                <i class="fas fa-hdd mr-2"></i>存储资源
+                            </h6>
+                            <div id="storage-metrics">
+                                <!-- 存储指标将在这里动态生成 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 资源使用趋势图表 -->
+                <div class="card node-info-card">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-chart-line mr-2"></i>资源使用趋势
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6 class="text-center mb-3">CPU使用趋势</h6>
+                                <div class="chart-container">
+                                    <canvas id="cpu-chart"></canvas>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="text-center mb-3">内存使用趋势</h6>
+                                <div class="chart-container">
+                                    <canvas id="memory-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 运行的Pod列表 -->
+                <div class="card node-info-card">
+                    <div class="card-header py-3">
+                        <h6 class="m-0 font-weight-bold text-primary">
+                            <i class="fas fa-list mr-2"></i>运行的Pod
+                            <span id="pod-count-badge" class="badge badge-info ml-2">0</span>
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="pod-list" class="pod-list">
+                            <!-- Pod列表将在这里动态生成 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 自动刷新按钮 -->
+<button class="btn btn-primary refresh-button" onclick="toggleAutoRefresh()" title="自动刷新">
+    <i id="refresh-icon" class="fas fa-pause"></i>
+</button>
+
+<!-- 操作确认模态框 -->
+<div class="modal fade" id="actionModal" tabindex="-1" role="dialog">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">确认操作</h5>
+                <button type="button" class="close" data-dismiss="modal">
+                    <span>&times;</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p id="action-confirm-text"></p>
+                <div id="action-description" class="text-muted"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="confirm-action-btn">确认</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+let clusterId = null;
+let nodeName = null;
+let autoRefreshInterval = null;
+let autoRefreshEnabled = true;
+let cpuChart = null;
+let memoryChart = null;
+let metricsHistory = {
+    timestamps: [],
+    cpuUsage: [],
+    memoryUsage: []
+};
+
+// 页面加载时初始化
+$(document).ready(function() {
+    // 从URL获取参数
+    const pathParts = window.location.pathname.split('/');
+    clusterId = pathParts[3]; // /k8s/clusters/{clusterId}/nodes/{nodeName}
+    nodeName = pathParts[5];
+    
+    if (!clusterId || !nodeName) {
+        showError('缺少必要的参数');
+        return;
+    }
+    
+    $('#node-name').text(nodeName);
+    
+    // 设置返回链接
+    $('#back-to-nodes').attr('href', `/k8s/clusters/${clusterId}/nodes`);
+    
+    // 加载节点详情
+    loadNodeDetail();
+    
+    // 初始化图表
+    initCharts();
+    
+    // 开始自动刷新
+    startAutoRefresh();
+});
+
+// 加载节点详情
+function loadNodeDetail() {
+    $.get(`/api/k8s/clusters/${clusterId}/nodes/${nodeName}`)
+        .done(function(response) {
+            if (response.success) {
+                renderNodeDetail(response.data);
+                updateMetrics(response.data);
+            } else {
+                showError('加载节点详情失败: ' + response.error);
+            }
+        })
+        .fail(function(xhr) {
+            showError('加载节点详情失败: ' + (xhr.responseJSON?.error || '网络错误'));
+        });
+}
+
+// 渲染节点详情
+function renderNodeDetail(node) {
+    // 渲染基本信息
+    renderBasicInfo(node);
+    
+    // 渲染健康状态
+    renderHealthStatus(node.health_status);
+    
+    // 渲染资源指标
+    renderResourceMetrics(node);
+    
+    // 渲染Pod列表
+    renderPodList(node.pods || []);
+}
+
+// 渲染基本信息
+function renderBasicInfo(node) {
+    const basicInfoHtml = `
+        <div class="row mb-2">
+            <div class="col-sm-4 text-muted">节点名称:</div>
+            <div class="col-sm-8 font-weight-bold">${node.name}</div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-sm-4 text-muted">状态:</div>
+            <div class="col-sm-8">
+                <span class="badge badge-${node.status === 'Ready' ? 'success' : 'danger'}">
+                    ${node.status}
+                </span>
+            </div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-sm-4 text-muted">角色:</div>
+            <div class="col-sm-8">
+                ${(node.roles || []).map(role => 
+                    `<span class="badge badge-secondary mr-1">${role}</span>`
+                ).join('')}
+            </div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-sm-4 text-muted">Kubernetes版本:</div>
+            <div class="col-sm-8">${node.version}</div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-sm-4 text-muted">内部IP:</div>
+            <div class="col-sm-8">${node.internal_ip}</div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-sm-4 text-muted">外部IP:</div>
+            <div class="col-sm-8">${node.external_ip}</div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-sm-4 text-muted">操作系统:</div>
+            <div class="col-sm-8">${node.os_image}</div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-sm-4 text-muted">内核版本:</div>
+            <div class="col-sm-8">${node.kernel_version}</div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-sm-4 text-muted">容器运行时:</div>
+            <div class="col-sm-8">${node.container_runtime}</div>
+        </div>
+        <div class="row mb-2">
+            <div class="col-sm-4 text-muted">运行时间:</div>
+            <div class="col-sm-8">${node.age}</div>
+        </div>
+    `;
+    
+    $('#node-basic-info').html(basicInfoHtml);
+}
+
+// 渲染健康状态
+function renderHealthStatus(healthStatus) {
+    if (!healthStatus) {
+        $('#node-health-status').html('<p class="text-muted">健康状态信息不可用</p>');
+        return;
+    }
+    
+    const overallClass = healthStatus.overall === 'Healthy' ? 'health-healthy' : 
+                        healthStatus.overall === 'Warning' ? 'health-warning' : 'health-unhealthy';
+    
+    let statusHtml = `
+        <div class="mb-3">
+            <div class="d-flex align-items-center mb-2">
+                <span class="health-indicator ${overallClass}"></span>
+                <strong>整体状态: ${healthStatus.overall}</strong>
+            </div>
+        </div>
+    `;
+    
+    if (healthStatus.issues && healthStatus.issues.length > 0) {
+        statusHtml += '<div class="mb-3"><h6 class="text-warning">问题:</h6>';
+        healthStatus.issues.forEach(issue => {
+            statusHtml += `<div class="alert alert-warning py-2 mb-2">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                <strong>${issue.type}:</strong> ${issue.message}
+            </div>`;
+        });
+        statusHtml += '</div>';
+    }
+    
+    if (healthStatus.conditions && healthStatus.conditions.length > 0) {
+        statusHtml += '<div><h6 class="text-primary mb-2">条件状态:</h6>';
+        healthStatus.conditions.forEach(condition => {
+            const conditionClass = condition.status === 'True' ? 'condition-true' : 'condition-false';
+            statusHtml += `
+                <div class="condition-item ${conditionClass}">
+                    <div class="d-flex justify-content-between">
+                        <span><strong>${condition.type}</strong></span>
+                        <span class="badge badge-${condition.status === 'True' ? 'success' : 'danger'}">
+                            ${condition.status}
+                        </span>
+                    </div>
+                    ${condition.message ? `<div class="text-muted small mt-1">${condition.message}</div>` : ''}
+                </div>
+            `;
+        });
+        statusHtml += '</div>';
+    }
+    
+    $('#node-health-status').html(statusHtml);
+}
+
+// 渲染资源指标
+function renderResourceMetrics(node) {
+    const resourceUsage = node.resource_usage || {};
+    const capacity = node.capacity || {};
+    const allocatable = node.allocatable || {};
+    
+    // CPU指标
+    const cpuRequestPercentage = resourceUsage.cpu_request_percentage || 0;
+    const cpuLimitPercentage = resourceUsage.cpu_limit_percentage || 0;
+    
+    $('#cpu-metrics').html(`
+        <div class="mb-3">
+            <div class="d-flex justify-content-between mb-1">
+                <span>总容量:</span>
+                <span class="font-weight-bold">${capacity.cpu || '0'}</span>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+                <span>可分配:</span>
+                <span>${allocatable.cpu || '0'}</span>
+            </div>
+        </div>
+        <div class="mb-2">
+            <div class="d-flex justify-content-between mb-1">
+                <span>请求使用:</span>
+                <span>${resourceUsage.cpu_requests || '0'} (${cpuRequestPercentage}%)</span>
+            </div>
+            <div class="resource-progress progress">
+                <div class="progress-bar bg-info" style="width: ${cpuRequestPercentage}%"></div>
+            </div>
+        </div>
+        <div>
+            <div class="d-flex justify-content-between mb-1">
+                <span>限制使用:</span>
+                <span>${resourceUsage.cpu_limits || '0'} (${cpuLimitPercentage}%)</span>
+            </div>
+            <div class="resource-progress progress">
+                <div class="progress-bar bg-warning" style="width: ${cpuLimitPercentage}%"></div>
+            </div>
+        </div>
+    `);
+    
+    // 内存指标
+    const memoryRequestPercentage = resourceUsage.memory_request_percentage || 0;
+    const memoryLimitPercentage = resourceUsage.memory_limit_percentage || 0;
+    
+    $('#memory-metrics').html(`
+        <div class="mb-3">
+            <div class="d-flex justify-content-between mb-1">
+                <span>总容量:</span>
+                <span class="font-weight-bold">${capacity.memory || '0'}</span>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+                <span>可分配:</span>
+                <span>${allocatable.memory || '0'}</span>
+            </div>
+        </div>
+        <div class="mb-2">
+            <div class="d-flex justify-content-between mb-1">
+                <span>请求使用:</span>
+                <span>${resourceUsage.memory_requests || '0'} (${memoryRequestPercentage}%)</span>
+            </div>
+            <div class="resource-progress progress">
+                <div class="progress-bar bg-info" style="width: ${memoryRequestPercentage}%"></div>
+            </div>
+        </div>
+        <div>
+            <div class="d-flex justify-content-between mb-1">
+                <span>限制使用:</span>
+                <span>${resourceUsage.memory_limits || '0'} (${memoryLimitPercentage}%)</span>
+            </div>
+            <div class="resource-progress progress">
+                <div class="progress-bar bg-warning" style="width: ${memoryLimitPercentage}%"></div>
+            </div>
+        </div>
+    `);
+    
+    // Pod统计
+    $('#pod-metrics').html(`
+        <div class="row text-center">
+            <div class="col-6">
+                <div class="h4 mb-0 text-success">${node.running_pods || 0}</div>
+                <div class="text-muted small">运行中</div>
+            </div>
+            <div class="col-6">
+                <div class="h4 mb-0 text-primary">${node.pod_count || 0}</div>
+                <div class="text-muted small">总计</div>
+            </div>
+        </div>
+        <div class="mt-2">
+            <div class="d-flex justify-content-between mb-1">
+                <span>Pod容量:</span>
+                <span>${capacity.pods || '0'}</span>
+            </div>
+            <div class="d-flex justify-content-between">
+                <span>使用率:</span>
+                <span>${resourceUsage.pod_capacity_percentage || 0}%</span>
+            </div>
+        </div>
+    `);
+    
+    // 存储指标
+    $('#storage-metrics').html(`
+        <div class="d-flex justify-content-between mb-2">
+            <span>临时存储:</span>
+            <span class="font-weight-bold">${capacity.storage || '0'}</span>
+        </div>
+        <div class="d-flex justify-content-between">
+            <span>可分配:</span>
+            <span>${allocatable.storage || '0'}</span>
+        </div>
+    `);
+}
+
+// 渲染Pod列表
+function renderPodList(pods) {
+    $('#pod-count-badge').text(pods.length);
+    
+    if (pods.length === 0) {
+        $('#pod-list').html('<p class="text-muted text-center py-4">此节点上没有运行的Pod</p>');
+        return;
+    }
+    
+    let podListHtml = '<div class="table-responsive">';
+    podListHtml += `
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Pod名称</th>
+                    <th>命名空间</th>
+                    <th>状态</th>
+                    <th>重启次数</th>
+                    <th>CPU请求</th>
+                    <th>内存请求</th>
+                    <th>运行时间</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    pods.forEach(pod => {
+        const statusClass = pod.status === 'Running' ? 'pod-status-running' : 
+                           pod.status === 'Pending' ? 'pod-status-pending' : 'pod-status-failed';
+        
+        podListHtml += `
+            <tr>
+                <td>
+                    <a href="/k8s/clusters/${clusterId}/namespaces/${pod.namespace}/pods/${pod.name}" 
+                       target="_blank" class="text-decoration-none">
+                        ${pod.name}
+                    </a>
+                </td>
+                <td>
+                    <span class="badge badge-light">${pod.namespace}</span>
+                </td>
+                <td>
+                    <span class="${statusClass}">${pod.status}</span>
+                </td>
+                <td>${pod.restart_count}</td>
+                <td>${pod.cpu_request}</td>
+                <td>${pod.memory_request}</td>
+                <td>${pod.created_at}</td>
+            </tr>
+        `;
+    });
+    
+    podListHtml += '</tbody></table></div>';
+    $('#pod-list').html(podListHtml);
+}
+
+// 更新指标数据并更新图表
+function updateMetrics(node) {
+    const resourceUsage = node.resource_usage || {};
+    const timestamp = new Date().toLocaleTimeString();
+    
+    // 更新历史数据
+    metricsHistory.timestamps.push(timestamp);
+    metricsHistory.cpuUsage.push(resourceUsage.cpu_request_percentage || 0);
+    metricsHistory.memoryUsage.push(resourceUsage.memory_request_percentage || 0);
+    
+    // 保持最近30个数据点
+    if (metricsHistory.timestamps.length > 30) {
+        metricsHistory.timestamps.shift();
+        metricsHistory.cpuUsage.shift();
+        metricsHistory.memoryUsage.shift();
+    }
+    
+    // 更新图表
+    updateCharts();
+}
+
+// 初始化图表
+function initCharts() {
+    // CPU使用趋势图
+    const cpuCtx = document.getElementById('cpu-chart').getContext('2d');
+    cpuChart = new Chart(cpuCtx, {
+        type: 'line',
+        data: {
+            labels: metricsHistory.timestamps,
+            datasets: [{
+                label: 'CPU使用率 (%)',
+                data: metricsHistory.cpuUsage,
+                borderColor: '#4e73df',
+                backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+    
+    // 内存使用趋势图
+    const memoryCtx = document.getElementById('memory-chart').getContext('2d');
+    memoryChart = new Chart(memoryCtx, {
+        type: 'line',
+        data: {
+            labels: metricsHistory.timestamps,
+            datasets: [{
+                label: '内存使用率 (%)',
+                data: metricsHistory.memoryUsage,
+                borderColor: '#1cc88a',
+                backgroundColor: 'rgba(28, 200, 138, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        callback: function(value) {
+                            return value + '%';
+                        }
+                    }
+                }
+            },
+            plugins: {
+                legend: {
+                    display: false
+                }
+            }
+        }
+    });
+}
+
+// 更新图表
+function updateCharts() {
+    if (cpuChart) {
+        cpuChart.data.labels = metricsHistory.timestamps;
+        cpuChart.data.datasets[0].data = metricsHistory.cpuUsage;
+        cpuChart.update('none');
+    }
+    
+    if (memoryChart) {
+        memoryChart.data.labels = metricsHistory.timestamps;
+        memoryChart.data.datasets[0].data = metricsHistory.memoryUsage;
+        memoryChart.update('none');
+    }
+}
+
+// 刷新节点详情
+function refreshNodeDetail() {
+    loadNodeDetail();
+}
+
+// 开始自动刷新
+function startAutoRefresh() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+    
+    autoRefreshInterval = setInterval(() => {
+        if (autoRefreshEnabled) {
+            loadNodeDetail();
+        }
+    }, 30000); // 30秒刷新一次
+}
+
+// 切换自动刷新
+function toggleAutoRefresh() {
+    autoRefreshEnabled = !autoRefreshEnabled;
+    const icon = $('#refresh-icon');
+    
+    if (autoRefreshEnabled) {
+        icon.removeClass('fa-play').addClass('fa-pause');
+    } else {
+        icon.removeClass('fa-pause').addClass('fa-play');
+    }
+}
+
+// 执行节点操作
+function executeAction(action) {
+    let actionName = '';
+    let actionDescription = '';
+    
+    switch(action) {
+        case 'cordon':
+            actionName = '封锁节点';
+            actionDescription = '封锁节点将阻止新Pod调度到此节点，但不会影响已运行的Pod。';
+            break;
+        case 'uncordon':
+            actionName = '解除封锁';
+            actionDescription = '解除节点封锁，允许新Pod调度到此节点。';
+            break;
+        case 'drain':
+            actionName = '驱逐Pod';
+            actionDescription = '驱逐节点上的所有Pod并封锁节点。请谨慎操作，这可能影响应用服务。';
+            break;
+    }
+    
+    $('#action-confirm-text').text(`确认要${actionName}吗？`);
+    $('#action-description').text(actionDescription);
+    
+    $('#confirm-action-btn').off('click').on('click', function() {
+        performNodeAction(action);
+    });
+    
+    $('#actionModal').modal('show');
+}
+
+// 执行节点操作
+function performNodeAction(action) {
+    const $btn = $('#confirm-action-btn');
+    $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> 执行中...');
+    
+    $.ajax({
+        url: `/api/k8s/clusters/${clusterId}/nodes/${nodeName}/${action}`,
+        method: 'POST',
+        contentType: 'application/json',
+        data: JSON.stringify(action === 'drain' ? { force: false } : {}),
+    })
+    .done(function(response) {
+        if (response.success) {
+            showSuccess(response.message || '操作成功');
+            $('#actionModal').modal('hide');
+            setTimeout(loadNodeDetail, 1000);
+        } else {
+            showError(response.error || '操作失败');
+        }
+    })
+    .fail(function(xhr) {
+        showError('操作失败: ' + (xhr.responseJSON?.error || '网络错误'));
+    })
+    .always(function() {
+        $btn.prop('disabled', false).text('确认');
+    });
+}
+
+// 显示成功消息
+function showSuccess(message) {
+    alert('✓ ' + message);
+}
+
+// 显示错误消息
+function showError(message) {
+    alert('✗ ' + message);
+}
+
+// 页面卸载时清理
+$(window).on('beforeunload', function() {
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+});
+</script>
+{% endblock %}

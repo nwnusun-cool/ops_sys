@@ -5,6 +5,7 @@ from flask import render_template, redirect, url_for, jsonify
 from flask_login import login_required, current_user
 from app.models.user import User
 from app.models.cluster import OpenstackCluster
+from app.models.k8s_cluster import K8sCluster
 from . import main_bp
 
 @main_bp.route('/')
@@ -23,6 +24,8 @@ def dashboard():
         'total_users': User.query.count(),
         'total_clusters': OpenstackCluster.query.count(),
         'active_clusters': OpenstackCluster.query.filter_by(is_active=True).count(),
+        'total_k8s_clusters': K8sCluster.query.count(),
+        'active_k8s_clusters': K8sCluster.query.filter_by(is_active=True).count(),
         'user_role': current_user.role
     }
     
@@ -36,8 +39,56 @@ def dashboard():
 @main_bp.route('/clusters')
 @login_required
 def clusters():
-    """集群管理页面"""
-    return render_template('clusters/index.html')
+    """OpenStack集群管理页面"""
+    return render_template('clusters/index_modern.html')
+
+@main_bp.route('/clusters/<int:cluster_id>')
+@login_required
+def cluster_detail(cluster_id):
+    """集群详情页面"""
+    return render_template('clusters/detail.html', cluster_id=cluster_id)
+
+@main_bp.route('/k8s-clusters')
+@login_required
+def k8s_clusters():
+    """K8s集群管理页面"""
+    return render_template('k8s/clusters/index.html')
+
+@main_bp.route('/k8s-namespaces')
+@login_required
+def k8s_namespaces():
+    """K8s命名空间管理页面"""
+    return render_template('k8s/namespaces/index.html')
+
+@main_bp.route('/k8s-pods')
+@login_required
+def k8s_pods():
+    """K8s Pod管理页面"""
+    return render_template('k8s/pods/index.html')
+
+@main_bp.route('/k8s-workloads')
+@login_required
+def k8s_workloads():
+    """K8s工作负载管理页面"""
+    return render_template('k8s/workloads/index.html')
+
+@main_bp.route('/k8s/clusters/<int:cluster_id>/nodes')
+@login_required
+def k8s_nodes(cluster_id):
+    """K8s节点管理页面"""
+    return render_template('k8s/nodes/index.html')
+
+@main_bp.route('/k8s/nodes')
+@login_required
+def k8s_all_nodes():
+    """K8s节点管理页面（独立访问）"""
+    return render_template('k8s/nodes/index.html')
+
+@main_bp.route('/k8s/clusters/<int:cluster_id>/nodes/<node_name>')
+@login_required
+def k8s_node_detail(cluster_id, node_name):
+    """K8s节点详情页面"""
+    return render_template('k8s/nodes/detail.html')
 
 @main_bp.route('/instances')
 @login_required
@@ -87,6 +138,21 @@ def snapshots():
     """快照管理页面"""
     return render_template('snapshots/index.html')
 
+@main_bp.route('/images')
+@login_required
+def images():
+    """镜像管理页面"""
+    return render_template('images/index.html')
+
+@main_bp.route('/roles')
+@login_required
+def roles():
+    """角色管理页面"""
+    # 检查权限
+    if not (current_user.has_permission('role.view') or current_user.role == 'super_admin'):
+        return redirect(url_for('main.dashboard'))
+    return render_template('roles/index.html')
+
 @main_bp.route('/api/stats')
 @login_required
 def api_stats():
@@ -95,6 +161,8 @@ def api_stats():
         'users': User.query.count(),
         'clusters': OpenstackCluster.query.count(),
         'active_clusters': OpenstackCluster.query.filter_by(is_active=True).count(),
+        'k8s_clusters': K8sCluster.query.count(),
+        'active_k8s_clusters': K8sCluster.query.filter_by(is_active=True).count(),
         'current_user': {
             'username': current_user.username,
             'role': current_user.role,
@@ -102,3 +170,38 @@ def api_stats():
         }
     }
     return jsonify(stats)
+
+@main_bp.route('/api/instances/stats')
+@login_required 
+def api_instance_stats():
+    """实例统计信息"""
+    try:
+        # 这里应该调用实际的OpenStack API获取实例统计
+        # 暂时返回模拟数据
+        stats = {
+            'success': True,
+            'total': 0,
+            'running': 0,
+            'stopped': 0,
+            'error': 0
+        }
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@main_bp.route('/api/volumes/stats')
+@login_required
+def api_volume_stats():
+    """卷统计信息"""
+    try:
+        # 这里应该调用实际的OpenStack API获取卷统计
+        # 暂时返回模拟数据
+        stats = {
+            'success': True,
+            'total': 0,
+            'in_use': 0,
+            'available': 0
+        }
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})

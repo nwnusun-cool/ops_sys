@@ -6,6 +6,7 @@ import logging
 from flask import request, jsonify
 from flask_login import login_required, current_user
 from . import api_bp as api
+from .helpers import get_cluster_id_from_request
 from app.models.base import db
 from app.models.cluster import OpenstackCluster
 from app.models.log import OperationLog
@@ -18,7 +19,7 @@ logger = logging.getLogger(__name__)
 def get_network_topology():
     """获取网络拓扑数据"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -43,7 +44,7 @@ def get_network_topology():
 def get_topology_node_detail(node_type, node_id):
     """获取拓扑节点详细信息"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -77,7 +78,7 @@ def get_topology_node_detail(node_type, node_id):
 def refresh_network_topology():
     """刷新网络拓扑数据"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -113,7 +114,7 @@ def refresh_network_topology():
 def save_topology_layout():
     """保存拓扑布局配置"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         data = request.get_json()
         
         if not cluster_id or not data:

@@ -7,6 +7,7 @@ from datetime import datetime
 from flask import request, jsonify, send_file
 from flask_login import login_required, current_user
 from . import api_bp as api
+from .helpers import get_cluster_id_from_request
 from app.models.base import db
 from app.models.cluster import OpenstackCluster
 from app.models.log import OperationLog
@@ -20,7 +21,7 @@ def list_routers():
     """获取路由器列表"""
     try:
         # 获取查询参数
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         status = request.args.get('status')
@@ -247,7 +248,7 @@ def list_all_cluster_routers():
 def get_router_detail(router_id):
     """获取路由器详细信息"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -276,7 +277,7 @@ def get_router_detail(router_id):
 def router_action(router_id):
     """执行路由器操作"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -421,7 +422,7 @@ def router_action(router_id):
 def create_router():
     """创建路由器"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -511,7 +512,7 @@ def create_router():
 def get_external_networks():
     """获取外部网络列表（用于设置路由器网关）"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -546,7 +547,7 @@ def get_external_networks():
 def batch_router_action():
     """批量路由器操作"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         data = request.get_json()
         
         if not cluster_id:

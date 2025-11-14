@@ -11,7 +11,10 @@ let selectedSecurityGroups = new Set();
 // 页面加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     console.log('Security Groups page loaded');
-    loadClusters();
+    
+    // 初始化集群选择器
+    initInlineClusterSelector(onClusterChange, '查看安全组列表');
+    
     setupEventListeners();
 });
 
@@ -43,51 +46,10 @@ function setupEventListeners() {
     });
 }
 
-// 加载集群列表
-async function loadClusters() {
-    try {
-        const response = await fetch('/api/clusters');
-        const data = await response.json();
-        
-        if (data.success) {
-            const select = document.getElementById('clusterSelect');
-            select.innerHTML = '<option value="">请选择集群</option>';
-            
-            let firstConnectedCluster = null;
-            
-            data.data.forEach(cluster => {
-                const option = document.createElement('option');
-                option.value = cluster.id;
-                option.textContent = `${cluster.name} (${cluster.connection_status})`;
-                if (cluster.connection_status !== 'connected') {
-                    option.disabled = true;
-                    option.textContent += ' - 连接失败';
-                } else if (!firstConnectedCluster) {
-                    firstConnectedCluster = cluster;
-                }
-                select.appendChild(option);
-            });
-            
-            // 自动选择第一个可用集群
-            if (firstConnectedCluster) {
-                select.value = firstConnectedCluster.id;
-                currentClusterId = firstConnectedCluster.id;
-                onClusterChange();
-            }
-        } else {
-            showAlert('加载集群失败: ' + data.error, 'danger');
-        }
-    } catch (error) {
-        console.error('Error loading clusters:', error);
-        showAlert('加载集群列表失败', 'danger');
-    }
-}
-
 // 集群变化处理
-function onClusterChange() {
-    const select = document.getElementById('clusterSelect');
-    const selectedValue = select.value;
-    currentClusterId = selectedValue ? parseInt(selectedValue) : null;
+function onClusterChange(clusterId) {
+    console.log('安全组管理 - 集群选择变化:', clusterId);
+    currentClusterId = clusterId;
     
     clearSelection();
     

@@ -1,6 +1,6 @@
 # OpenStack运维管理平台 v2.0
 
-一个基于Flask的多OpenStack集群统一管理平台，提供Web界面进行实例、卷、网络、快照等资源的集中管理。
+一个基于Flask的运维集群统一管理平台，提供Web界面进行实例、卷、网络、快照等资源的集中管理。
 
 ## ✨ 主要特性
 
@@ -16,8 +16,7 @@
 ### 环境要求
 
 - Python 3.8+
-- MySQL 8.0+ (或MariaDB 10.3+)
-- Redis (可选，用于缓存)
+- sqllite
 
 ### 1. 克隆项目
 
@@ -50,22 +49,6 @@ pip install -r requirements.txt
 # 复制环境变量模板
 cp .env.example .env
 
-# 编辑配置文件
-vim .env
-```
-
-主要配置项：
-```env
-# 数据库配置
-DATABASE_URL=mysql+pymysql://username:password@localhost/ops_sys
-
-# 应用配置
-SECRET_KEY=your-very-secret-key
-FLASK_ENV=development
-
-# OpenStack配置文件
-OPENSTACK_CONFIG_FILE=openstack_config.json
-```
 
 ### 4. 初始化数据库
 
@@ -81,10 +64,7 @@ python manage.py init-db
 
 ```bash
 # 开发环境
-python start_dev.py
-
-# 或生产环境
-python run.py
+python app.py
 ```
 
 访问 http://localhost:5001

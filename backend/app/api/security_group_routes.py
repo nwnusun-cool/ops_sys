@@ -7,6 +7,7 @@ from datetime import datetime
 from flask import request, jsonify, send_file
 from flask_login import login_required, current_user
 from . import api_bp as api
+from .helpers import get_cluster_id_from_request
 from app.models.base import db
 from app.models.cluster import OpenstackCluster
 from app.models.log import OperationLog
@@ -20,7 +21,7 @@ def list_security_groups():
     """获取安全组列表"""
     try:
         # 获取查询参数
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         page = request.args.get('page', 1, type=int)
         per_page = request.args.get('per_page', 20, type=int)
         search = request.args.get('search', '').strip()
@@ -207,7 +208,7 @@ def list_all_cluster_security_groups():
 def get_security_group_detail(sg_id):
     """获取安全组详细信息"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -281,7 +282,7 @@ def get_security_group_detail(sg_id):
 def security_group_action(sg_id):
     """执行安全组操作"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -415,7 +416,7 @@ def security_group_action(sg_id):
 def create_security_group():
     """创建安全组"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         if not cluster_id:
             return jsonify({'success': False, 'error': '必须指定集群ID'}), 400
         
@@ -524,7 +525,7 @@ def create_security_group():
 def batch_security_group_action():
     """批量安全组操作"""
     try:
-        cluster_id = request.args.get('cluster_id', type=int)
+        cluster_id = get_cluster_id_from_request()
         data = request.get_json()
         
         if not cluster_id:

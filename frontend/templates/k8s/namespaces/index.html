@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}命名空间管理 - Kubernetes{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/namespaces-kubesphere.css') }}?v=1.0">
+{% endblock %}
+
+{% block content %}
+<!-- 命名空间管理页面 - KubeSphere风格 -->
+<div class="page-wrapper">
+  <!-- 面包屑导航 -->
+  <div class="breadcrumb-section">
+    <nav aria-label="breadcrumb">
+      <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+          <a href="{{ url_for('main.index') }}"><i class="fas fa-dharmachakra"></i> Kubernetes</a>
+        </li>
+        <li class="breadcrumb-item active">命名空间</li>
+      </ol>
+    </nav>
+  </div>
+
+  <!-- 页面标题和统计 -->
+  <div class="page-header">
+    <div class="page-title-section">
+      <h1 class="page-title">
+        <i class="fas fa-layer-group text-primary"></i>
+        命名空间管理
+      </h1>
+      <p class="page-description">管理Kubernetes集群中的命名空间，创建、查看和删除项目命名空间</p>
+    </div>
+    
+    <!-- 统计卡片 -->
+    <div class="stats-cards-row">
+      <div class="stat-card stat-card-success">
+        <div class="stat-card-content">
+          <div class="stat-number" id="activeNamespacesCount">0</div>
+          <div class="stat-label">活跃命名空间</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-check-circle"></i>
+        </div>
+      </div>
+      
+      <div class="stat-card stat-card-info">
+        <div class="stat-card-content">
+          <div class="stat-number" id="userNamespacesCount">0</div>
+          <div class="stat-label">用户命名空间</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-user-tag"></i>
+        </div>
+      </div>
+      
+      <div class="stat-card stat-card-warning">
+        <div class="stat-card-content">
+          <div class="stat-number" id="systemNamespacesCount">0</div>
+          <div class="stat-label">系统命名空间</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-cogs"></i>
+        </div>
+      </div>
+      
+      <div class="stat-card stat-card-danger">
+        <div class="stat-card-content">
+          <div class="stat-number" id="terminatingNamespacesCount">0</div>
+          <div class="stat-label">终止中</div>
+        </div>
+        <div class="stat-icon">
+          <i class="fas fa-hourglass-half"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 工具栏 -->
+  <div class="toolbar-section">
+    <div class="toolbar-left">
+      <!-- 集群选择器 -->
+      <div class="cluster-selector">
+        <select class="form-select form-select-sm" id="cluster-filter">
+          <option value="">选择集群...</option>
+        </select>
+      </div>
+      
+      <!-- 状态过滤 -->
+      <div class="filter-item">
+        <select class="form-select form-select-sm" id="status-filter">
+          <option value="">所有状态</option>
+          <option value="Active">活跃</option>
+          <option value="Terminating">终止中</option>
+        </select>
+      </div>
+      
+      <!-- 类型过滤 -->
+      <div class="filter-item">
+        <select class="form-select form-select-sm" id="type-filter">
+          <option value="">所有类型</option>
+          <option value="user">用户命名空间</option>
+          <option value="system">系统命名空间</option>
+        </select>
+      </div>
+    </div>
+    
+    <div class="toolbar-right">
+      <!-- 搜索框 -->
+      <div class="search-box">
+        <input type="text" class="form-control form-control-sm" id="namespace-search" 
+               placeholder="搜索命名空间名称...">
+        <i class="fas fa-search search-icon"></i>
+      </div>
+      
+      <!-- 刷新按钮 -->
+      <button class="btn btn-sm btn-outline-primary" id="refresh-btn">
+        <i class="fas fa-sync-alt"></i>
+      </button>
+      
+      <!-- 创建按钮 -->
+      <button class="btn btn-sm btn-primary" id="create-namespace-btn">
+        <i class="fas fa-plus"></i> 创建命名空间
+      </button>
+    </div>
+  </div>
+
+  <!-- 命名空间卡片容器 -->
+  <div class="content-section" id="namespaces-content">
+    <div class="namespaces-cards-container" id="namespaces-cards-container">
+      <!-- 命名空间卡片将通过JavaScript动态生成 -->
+    </div>
+  </div>
+
+  <!-- 分页 -->
+  <div class="pagination-section" id="pagination-section" style="display: none;">
+    <div class="pagination-info">
+      显示 <span id="items-range">0-0</span> / <span id="total-items">0</span> 个命名空间
+    </div>
+    <nav aria-label="分页">
+      <ul class="pagination pagination-sm" id="pagination-controls">
+      </ul>
+    </nav>
+  </div>
+</div>
+
+<!-- 创建命名空间模态框 -->
+<div class="modal fade" id="create-namespace-modal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="fas fa-plus me-2"></i>创建命名空间
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="create-namespace-form">
+          <div class="mb-3">
+            <label for="namespace-name" class="form-label">命名空间名称 *</label>
+            <input type="text" class="form-control" id="namespace-name" 
+                   pattern="^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                   placeholder="例如: my-namespace" required>
+            <div class="form-text">
+              只能包含小写字母、数字和连字符，且不能以连字符开头或结尾
+            </div>
+          </div>
+          
+          <div class="mb-3">
+            <label for="namespace-description" class="form-label">描述</label>
+            <textarea class="form-control" id="namespace-description" 
+                      rows="2" placeholder="命名空间用途描述..."></textarea>
+          </div>
+          
+          <div class="mb-3">
+            <label class="form-label">标签</label>
+            <div id="labels-container">
+              <div class="input-group mb-2">
+                <input type="text" class="form-control label-key" placeholder="键">
+                <span class="input-group-text">=</span>
+                <input type="text" class="form-control label-value" placeholder="值">
+                <button type="button" class="btn btn-outline-secondary add-label-btn">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button type="button" class="btn btn-primary" id="confirm-create-btn">
+          <i class="fas fa-check me-1"></i>创建
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 命名空间详情侧滑面板 -->
+<div class="detail-panel" id="namespace-detail-panel">
+  <div class="detail-panel-header">
+    <h5 class="detail-panel-title">
+      <i class="fas fa-layer-group"></i>
+      <span id="detail-namespace-name">命名空间详情</span>
+    </h5>
+    <button class="btn-close" id="close-detail-panel"></button>
+  </div>
+  
+  <div class="detail-panel-content">
+    <!-- 详情内容将通过JavaScript动态生成 -->
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- K8s状态管理器 -->
+<script src="{{ url_for('static', filename='js/k8s-state-manager.js') }}"></script>
+<script src="{{ url_for('static', filename='js/namespaces-manager.js') }}?v=1.0"></script>
+{% endblock %}
